@@ -1,0 +1,186 @@
+{
+  "current": "p4-food",
+  "updated": "2026-08-15T01:33:56Z",
+  "loop": "attempt current skill -> score episode -> mark pass/fail -> stay or advance",
+  "skills": [
+    {
+      "id": "p1-leave-spawn",
+      "name": "Leave village/spawn r>=24",
+      "status": "done",
+      "deps": [],
+      "attempts": 1,
+      "last_score": null,
+      "note": "confirmed r=35"
+    },
+    {
+      "id": "p2-hold-one",
+      "name": "Hold 1 dirt or sand",
+      "status": "done",
+      "deps": [
+        "p1-leave-spawn"
+      ],
+      "attempts": 1,
+      "last_score": null,
+      "note": "1 dirt at 25,102,24"
+    },
+    {
+      "id": "p3-stack-8",
+      "name": "Stack 8 dirt/sand outside spawn",
+      "status": "done",
+      "deps": [
+        "p2-hold-one"
+      ],
+      "attempts": 1,
+      "last_score": null,
+      "note": "9 dirt at r=35, deaths=0, 2026-08-15 11:18 AEST"
+    },
+    {
+      "id": "p4-food",
+      "name": "Get food and eat",
+      "status": "doing",
+      "deps": [
+        "p2-hold-one"
+      ],
+      "attempts": 1,
+      "last_score": null,
+      "note": "attempt 1 fail: pid=514937 pos=25.35 100.00 24.35 r=35.1 dirt=9 food_inv=0 bar=19 deaths=0; no berries/mobs/drops in 16m, wander stuck local, 2026-08-15 11:22 AEST"
+    },
+    {
+      "id": "p5-sand",
+      "name": "Find sand not just dirt",
+      "status": "todo",
+      "deps": [
+        "p3-stack-8"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p6-sandstone",
+      "name": "Craft 1 sandstone",
+      "status": "todo",
+      "deps": [
+        "p5-sand"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p7-place-one",
+      "name": "Place 1 block",
+      "status": "todo",
+      "deps": [
+        "p3-stack-8"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p8-wall",
+      "name": "Place a 3-block wall",
+      "status": "todo",
+      "deps": [
+        "p7-place-one"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p9-hut",
+      "name": "Tiny hut",
+      "status": "todo",
+      "deps": [
+        "p6-sandstone",
+        "p8-wall"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p10-follow",
+      "name": "Follow Har0x safely",
+      "status": "todo",
+      "deps": [
+        "p1-leave-spawn"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p11-flee",
+      "name": "Flee a hostile and live",
+      "status": "todo",
+      "deps": [
+        "p1-leave-spawn"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p12-wood",
+      "name": "Tree, plank, crafting table",
+      "status": "todo",
+      "deps": [
+        "p3-stack-8"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p13-shovel",
+      "name": "Wooden shovel or pick",
+      "status": "todo",
+      "deps": [
+        "p12-wood"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p14-play",
+      "name": "Free play self-sufficient",
+      "status": "todo",
+      "deps": [
+        "p9-hut",
+        "p4-food",
+        "p11-flee",
+        "p13-shovel"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": ""
+    },
+    {
+      "id": "p15-others",
+      "name": "Interact with other players and Mineflayer bots",
+      "status": "todo",
+      "deps": [
+        "p10-follow",
+        "p14-play"
+      ],
+      "attempts": 0,
+      "last_score": null,
+      "note": "chat, follow, don't grief; Glenn/Har0x and other bots"
+    },
+    {
+      "id": "p16-chat",
+      "name": "Listen to chat and come/follow/stop",
+      "status": "doing",
+      "deps": [
+        "p10-follow"
+      ],
+      "attempts": 1,
+      "last_score": null,
+      "note": "listener live pid=540063; logs rl/chat.jsonl; local come/follow/stop; pending for LLM; food+9 dirt kept, 2026-08-15 11:33 AEST"
+    }
+  ]
+}

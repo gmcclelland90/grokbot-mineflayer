@@ -1,0 +1,7 @@
+{
+  "host": "REPLACE_WITH_SERVER_HOST",
+  "port": 25565,
+  "version": "1.21.4",
+  "username": "Steve",
+  "auth": "offline"
+}

@@ -1,0 +1,9 @@
+node_modules/
+bot.log
+STATUS.txt
+.bin/bot.pid
+.bin/bot.pid.tmp
+rl/command.json
+rl/chat-pending.jsonl
+*.log
+.DS_Store

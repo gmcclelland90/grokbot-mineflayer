@@ -1,0 +1,43 @@
+# Steve advanced architecture
+
+Rethink: stop homemade loops. Plugins do the body. A state machine does the hands. A skill library + this chat do the brain. End state: wander, build, fight, talk, and play with Har0x and other Mineflayer bots.
+
+## Layers
+
+1. Body (Mineflayer plugins). Never reimplement these.
+   - HAVE: mineflayer, pathfinder, collectblock, auto-eat, pvp
+   - ADD NOW: mineflayer-tool, mineflayer-armor-manager, mineflayer-statemachine
+   - ADD NEXT: schematic/builder (real houses), bloodhound (who hit me), prismarine-viewer optional
+2. Hands: statemachine nested states (idle, follow, collect, eat, flee, fight, craft, place, talk, hold).
+   Transitions, not a 1500-line tick().
+3. Skills: named actions like Mindcraft (`!collect sand 8`, `!follow Har0x`, `!craft sandstone`, `!come`, `!stop`).
+   Each skill is a small file that calls plugins. Matrix scores them. Keep winners.
+4. Brain: this chat + keep-alive. Picks current matrix skill, writes/patches a skill file, talks in game.
+   Do not train PPO. Voyager-style: try, score, keep code.
+5. Social: in-game chat in and out. Local commands instant. Longer talk via chat-pending + command.json.
+   Later: same !commands so other Grok/Mineflayer bots can ask Steve for help.
+6. Memory: STATUS.txt, LEARNINGS.md, rl/matrix.json, rl/episodes.jsonl, rl/skills/, rl/chat.jsonl
+7. Ops: stay outside spawn r>=24 to gather. Restart only if dead or a new plugin must load. Chat talks like a person, no coord spam.
+
+## Hard rules we already paid for
+
+- Paper spawn protect eats drops near 0,0. Gather/place outside ~24.
+- Do not grief player builds.
+- One skill at a time on the matrix until free play.
+- collectBlock.collect(target) for gather. No homemade walk+dig+pickup.
+
+## Build order
+
+P0 now: wire collectblock for all gather. Keep chat. Keep matrix.
+P1: install tool + armor-manager + statemachine. Replace play.js tick with states.
+P2: skill files + !commands (collect, follow, come, stop, eat, flee, craft, place).
+P3: food + wood + tools via those skills (climb matrix p4-p13).
+P4: schematic/builder for the hut and bigger builds.
+P5: other-bot protocol (chat !commands, share coords, don't grief each other).
+P6: free play. Brain only sets goals. Hands run forever.
+
+## What we are not doing
+
+- Not cloning Voyager/Mindcraft wholesale (wrong version, their LLM keys, LAN assumptions).
+- Not neural RL on this box.
+- Not another 2000-line play.js.

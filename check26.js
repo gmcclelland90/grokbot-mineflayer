@@ -1,0 +1,1 @@
+const md=require('minecraft-data'); const d=md('26.2'); console.log('top-level 26.2', d && d.version); console.log('path', require.resolve('minecraft-data')); try { const p=require('minecraft-protocol'); console.log('mcproto version file', require('./node_modules/minecraft-protocol/src/version.js')); } catch(e) { console.log('mcproto err', e.message); }

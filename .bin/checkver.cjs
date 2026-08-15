@@ -1,0 +1,1 @@
+const md=require("/home/box/minecraft-bot/node_modules/minecraft-data"); const vs=md.supportedVersions.pc; console.log("has26.2", vs.includes("26.2")); console.log("last", vs.slice(-10)); try { const v=md("26.2"); console.log("version", v && v.version); } catch(e) { console.log("err", e.message); }
