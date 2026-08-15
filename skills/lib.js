@@ -15,7 +15,7 @@ export const SAND_ITEMS = new Set(['sand', 'red_sand'])
 export const PLAYER_NAMES = ['har0x', 'glenn']
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const LOG = path.join(__dirname, '..', 'bot.log')
+const LOG = process.env.STEVE_LOG || path.join(__dirname, '..', 'bot.log')
 
 export function plog(msg) {
   const line = `[${new Date().toISOString()}] [play] ${msg}`

@@ -8,3 +8,8 @@ rl/chat-pending.jsonl
 *.log
 .DS_Store
 bun.lock
+
+rl/chest.lock
+rl/jobs.lock
+STATUS-*.txt
+.bin/bot-*.pid

@@ -5,10 +5,12 @@ import { placeAt } from './place.js'
 import { buildNamed, countBuildMaterials, hutSolidCount } from './build.js'
 import { runCamp, campSolidCount } from './camp.js'
 import { runFarm } from './farm.js'
+import { runGather, missingTargets } from './gather.js'
+import { claimNextJob, runClaimedJob, finishJob } from './jobs.js'
 import { lookAtNearest } from './look.js'
 import { goToSleep, wakeUp, shouldSleep, isNightOrThunder } from './sleep.js'
 
-const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'camp', 'farm', 'sleep', 'guard'])
+const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'camp', 'farm', 'sleep', 'guard', 'gather', 'chest', 'store', 'withdraw'])
 const DOODLE_ITEMS = ['dirt', 'grass_block', 'sand', 'red_sand', 'sandstone', 'cobblestone']
 const SOCIAL_CD_MS = 60000
 const SOCIAL_LINES = ['hi', 'hey', 'found dirt', 'looking around', 'nice spot']
@@ -101,15 +103,14 @@ function pickGoal(bot, state) {
   const campNeed = campSolidCount()
   if (!state.funStarted) {
     state.funStarted = true
-    if (!state.campBuilt) return 'camp'
-    return 'wander'
+    return 'job'
   }
+  if (Object.keys(missingTargets(bot) || {}).length) return 'gather'
   if (!state.campBuilt) return 'camp'
   if (state.campBuilt && !state.farmReady) return 'farm'
-  const pool = ['wander']
-  if (sand < 8 || dirt < 8) pool.push('collect')
+  const pool = ['wander', 'gather', 'farm']
   if (logs < 1) pool.push('wood')
-  if (sand + dirt >= 1) pool.push('doodle')
+  if (state.campBuilt && state.farmReady && dirt >= 20) pool.push('doodle')
   if (need > 0 && buildN >= need) pool.push('hut')
   if (state.farmReady || state.treesReady) pool.push('farm')
   const other = nearbyOther(bot, 12)
@@ -287,12 +288,23 @@ export async function funTick(bot, state) {
   if (bot.armorManager && typeof bot.armorManager.equipAll === 'function') {
     try { await bot.armorManager.equipAll() } catch {}
   }
+  try {
+    const job = await claimNextJob(bot, state)
+    if (job) {
+      mark(bot, state, job.type || 'job', 'job ' + job.id)
+      const ok = await runClaimedJob(bot, state, job)
+      await finishJob(job, ok)
+      return true
+    }
+  } catch (err) {
+    plog('fun job fail ' + (err && err.message))
+  }
   const goal = pickGoal(bot, state)
   remember(state, goal)
   mark(bot, state, goal === 'collect' ? 'collect' : goal, 'pick ' + goal)
   try {
     if (goal === 'wander') await wander(bot, state)
-    else if (goal === 'collect') await gather(bot, state)
+    else if (goal === 'collect' || goal === 'gather' || goal === 'job') await runGather(bot, state)
     else if (goal === 'wood') await woodOnce(bot, state)
     else if (goal === 'doodle') await doodle(bot, state)
     else if (goal === 'hut') await hutOnce(bot, state)

@@ -25,7 +25,7 @@ function log(level, msg, extra) {
     const line = extra !== undefined
       ? `[${ts}] [${level}] ${msg} ${typeof extra === 'string' ? extra : JSON.stringify(extra)}`
       : `[${ts}] [${level}] ${msg}`
-    fs.appendFileSync(path.join(__dirname, 'bot.log'), line + '\n')
+    fs.appendFileSync(process.env.STEVE_LOG || path.join(__dirname, 'bot.log'), line + '\n')
   } catch {}
 }
 

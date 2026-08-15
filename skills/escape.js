@@ -1,7 +1,7 @@
 import { Vec3, plog, sleep, posOf, isSolid, resolveItemName, countNamed, clearMove } from './lib.js'
 import { leaveSpawnForGather } from './collect.js'
 
-const PLAYER_CMDS = new Set(['come', 'follow', 'stay', 'wood', 'collect', 'craft', 'place', 'build', 'table', 'shovel', 'pick', 'camp', 'farm', 'sleep', 'guard'])
+const PLAYER_CMDS = new Set(['come', 'follow', 'stay', 'wood', 'collect', 'craft', 'place', 'build', 'table', 'shovel', 'pick', 'camp', 'farm', 'sleep', 'guard', 'gather', 'chest', 'store', 'withdraw'])
 const GIVE_UP_MS = 45000
 
 function sideSolid(bot, p, dx, dz, dy) {

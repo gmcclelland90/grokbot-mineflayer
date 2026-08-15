@@ -7,6 +7,7 @@ import { leaveSpawnForGather } from './collect.js'
 import { gatherWood } from './wood.js'
 import { craftSandstone, craftPlanks } from './craft.js'
 import { placeAt } from './place.js'
+import { loadStorage, saveStorage } from './storage.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SCHEM_DIR = path.join(__dirname, '..', 'schematics')
@@ -56,6 +57,38 @@ function countBuildInv(bot) {
 export function countBuildMaterials(bot) {
   return countBuildInv(bot)
 }
+
+export function countInvAndChests(bot) {
+  const bag = {}
+  eachInventoryItem(bot, (it) => {
+    const n = resolveItemName(bot, it)
+    if (!n) return
+    bag[n] = (bag[n] || 0) + (Number(it.count) || 0)
+  })
+  const s = loadStorage()
+  for (const c of s.chests || []) {
+    for (const [name, n] of Object.entries(c.items || {})) {
+      bag[name] = (bag[name] || 0) + Number(n || 0)
+    }
+  }
+  return bag
+}
+
+export function planSchematic(bot, solids, name) {
+  const needN = (solids && solids.length) || 0
+  const haveBuild = countBuildMaterials(bot)
+  const bag = countInvAndChests(bot)
+  const chestBuild = (bag.dirt || 0) + (bag.cobblestone || 0) + (bag.sandstone || 0)
+  const have = haveBuild + chestBuild
+  const missing = {}
+  if (have < needN) missing.blocks = needN - have
+  const s = loadStorage()
+  s.missing = Object.assign({}, s.missing || {}, missing, { schematic: name || '', need: needN, have })
+  saveStorage(s)
+  plog('build plan ' + (name || '') + ' need=' + needN + ' inv=' + haveBuild + ' inv+chests=' + have + ' missing=' + JSON.stringify(missing))
+  return { need: needN, have, haveBuild, missing }
+}
+
 
 const _solidCache = {}
 export function schemSolidCount(name) {
@@ -176,6 +209,7 @@ export async function buildNamed(bot, state, name) {
     plog('build empty schematic ' + want)
     return false
   }
+  const plan = planSchematic(bot, solids, want)
   await maybeGather(bot, state, solids.length)
   const origin = pickOrigin(bot, schem.size)
   if (!origin) {
@@ -217,6 +251,7 @@ export async function buildNamedAt(bot, state, name, origin) {
     plog('build empty schematic ' + want)
     return false
   }
+  planSchematic(bot, solids, want)
   return placeSolids(bot, state, want, solids, origin)
 }
 

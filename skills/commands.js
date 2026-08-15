@@ -36,6 +36,13 @@ export function parseLocalCmd(text) {
   if (core === 'farm') return { cmd: 'farm', kind: 'tend' }
   const farmM = core.match(/^farm\s+([a-z0-9_]+)$/)
   if (farmM) return { cmd: 'farm', kind: farmM[1] }
+  if (core === 'gather') return { cmd: 'gather' }
+  const gatherM = core.match(/^gather\s+([a-z0-9_]+)(?:\s+(\d+))?$/)
+  if (gatherM) return { cmd: 'gather', item: gatherM[1], count: gatherM[2] ? Number(gatherM[2]) : 8 }
+  if (core === 'chest' || core === 'list') return { cmd: 'chest' }
+  if (core === 'store' || core === 'deposit') return { cmd: 'store' }
+  const withM = core.match(/^withdraw\s+([a-z0-9_]+)(?:\s+(\d+))?$/)
+  if (withM) return { cmd: 'withdraw', item: withM[1], count: withM[2] ? Number(withM[2]) : 1 }
   if (core === 'commands' || core === 'help') return { cmd: 'commands' }
   if (core === 'sleep') return { cmd: 'sleep' }
   if (core === 'guard off' || core === 'unguard') return { cmd: 'guard', on: false }

@@ -1,5 +1,6 @@
 import { plog, sleep, stopPath, PLAYER_NAMES, gotoNear } from './lib.js'
 import { HOSTILES, nearestHostile } from './flee.js'
+import { isAllyName } from './cluster.js'
 
 // Official guard.js + mineflayer-pvp: bot.pvp.attack(nearest mob).
 // https://github.com/PrismarineJS/mineflayer/blob/master/examples/guard.js
@@ -40,6 +41,7 @@ function isPlayerOrBot(e, bot) {
   const me = String(bot.username || 'steve').toLowerCase()
   if (n === me || n === 'steve') return true
   if (PLAYER_NAMES.includes(n)) return true
+  if (isAllyName(n)) return true
   return false
 }
 

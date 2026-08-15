@@ -13,6 +13,8 @@ import { placeHeld } from './place.js'
 import { buildNamed } from './build.js'
 import { runCamp } from './camp.js'
 import { runFarm } from './farm.js'
+import { runGather } from './gather.js'
+import { runChest } from './chest.js'
 import { plog, sleep, stopPath, findPlayerNamed, horizFromOrigin, SPAWN_SAFE_R } from './lib.js'
 
 function smApi(mod) {
@@ -48,18 +50,26 @@ function wantFarm(state) {
   return state.chatMode === 'farm'
 }
 
+function wantGather(state) {
+  return state.chatMode === 'gather'
+}
+
+function wantChest(state) {
+  return state.chatMode === 'chest' || state.chatMode === 'store' || state.chatMode === 'withdraw'
+}
+
 function wantSleep(state) {
   return state.chatMode === 'sleep'
 }
 
 function wantSkill(state) {
-  return wantWood(state) || wantCraft(state) || wantPlace(state) || wantBuild(state) || wantSleep(state) || wantFarm(state)
+  return wantWood(state) || wantCraft(state) || wantPlace(state) || wantBuild(state) || wantSleep(state) || wantFarm(state) || wantGather(state) || wantChest(state)
 }
 
 function shouldCollect(state, bot) {
   if (state.chatMode === 'stay' || state.chatMode === 'follow' || state.chatMode === 'come') return false
   if (wantSkill(state)) return false
-  return state.chatMode === 'collect'
+  return state.chatMode === 'collect' || state.chatMode === 'gather'
 }
 
 function hole(bot, state) {
@@ -145,6 +155,11 @@ async function runFollow(bot, ctx, still) {
 
 async function runCollect(bot, ctx, still) {
   const state = ctx.state
+  if (state.chatMode === 'gather') {
+    try { await runGather(bot, state) } catch (err) { plog('gather skill fail ' + (err && err.message)) }
+    if (state.chatMode === 'gather') state.chatMode = null
+    return
+  }
   while (still() && !state.dead) {
     if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
       await leaveSpawnForGather(bot, state)
@@ -155,6 +170,13 @@ async function runCollect(bot, ctx, still) {
     else await huntBlock(bot, state, name)
     await new Promise((r) => setTimeout(r, 400))
   }
+}
+
+async function runChestSkill(bot, ctx, still) {
+  const state = ctx.state
+  if (!still() || state.dead) return
+  try { await runChest(bot, state) } catch (err) { plog('chest skill fail ' + (err && err.message)) }
+  if (wantChest(state)) state.chatMode = null
 }
 
 async function runIdle(bot, ctx, still) {
@@ -239,6 +261,7 @@ export function startStateMachine(bot, state) {
   const place = new SkillState('place', bot, ctx, runPlace)
   const build = new SkillState('build', bot, ctx, runBuild)
   const farm = new SkillState('farm', bot, ctx, runFarmSkill)
+  const chest = new SkillState('chest', bot, ctx, runChestSkill)
   const sleepState = new SkillState('sleep', bot, ctx, runSleepSkill)
   const guard = new SkillState('guard', bot, ctx, runGuard)
 
@@ -671,8 +694,49 @@ export function startStateMachine(bot, state) {
       name: 'farm->build',
       shouldTransition: () => !wantFarm(state) && wantBuild(state),
       onTransition: () => plog('transition farm->build')
+    }),
+    new StateTransition({
+      parent: idle,
+      child: chest,
+      name: 'idle->chest',
+      shouldTransition: () => wantChest(state),
+      onTransition: () => plog('transition idle->chest')
+    }),
+    new StateTransition({
+      parent: collect,
+      child: chest,
+      name: 'collect->chest',
+      shouldTransition: () => wantChest(state),
+      onTransition: () => plog('transition collect->chest')
+    }),
+    new StateTransition({
+      parent: farm,
+      child: chest,
+      name: 'farm->chest',
+      shouldTransition: () => wantChest(state),
+      onTransition: () => plog('transition farm->chest')
+    }),
+    new StateTransition({
+      parent: chest,
+      child: follow,
+      name: 'chest->follow',
+      shouldTransition: () => wantFollow(state),
+      onTransition: () => plog('transition chest->follow')
+    }),
+    new StateTransition({
+      parent: chest,
+      child: idle,
+      name: 'chest->idle',
+      shouldTransition: () => !wantChest(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantFarm(state) && !wantBuild(state),
+      onTransition: () => plog('transition chest->idle')
+    }),
+    new StateTransition({
+      parent: chest,
+      child: collect,
+      name: 'chest->collect',
+      shouldTransition: () => !wantChest(state) && shouldCollect(state, bot),
+      onTransition: () => plog('transition chest->collect')
     })
-
   ]
 
   const work = new NestedStateMachine(workTransitions, idle)
@@ -784,6 +848,6 @@ export function startStateMachine(bot, state) {
 
   state.useMachine = true
   state.smState = 'work'
-  plog('state machine live nested=work(fun,follow,collect,wood,craft,place,build,farm,sleep) root(escape,flee,guard,work) camp+farm looker+guard+sleeper no auto-follow')
+  plog('state machine live nested=work(fun,follow,collect,gather,wood,craft,place,build,farm,chest,sleep) root(escape,flee,guard,work) camp+farm+gather+chest jobs queen=chat no auto-follow')
   return machine
 }

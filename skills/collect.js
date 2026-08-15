@@ -1,4 +1,4 @@
-import { Vec3, goals, pathfinderPkg, plog, sleep, posOf, bareName, countSand, countNamed, inventorySummary, horizFromOrigin, isPlayerBuilt, isSandBlock, isLogName, looksLikeTree, stopPath, sayAllowed, SPAWN_SAFE_R, SAND_SCAN_R } from './lib.js'
+import { Vec3, goals, pathfinderPkg, plog, sleep, posOf, bareName, countSand, countNamed, inventorySummary, horizFromOrigin, isPlayerBuilt, isSandBlock, isLogName, looksLikeTree, stopPath, sayAllowed, isSolid, gotoNear, SPAWN_SAFE_R, SAND_SCAN_R } from './lib.js'
 
 function applyCollectMovements(bot) {
   try {
@@ -188,18 +188,65 @@ const BLOCK_ALIASES = {
   sand: ['sand', 'red_sand'],
   dirt: ['dirt', 'grass_block'],
   gravel: ['gravel'],
-  sandstone: ['sandstone', 'red_sandstone']
+  sandstone: ['sandstone', 'red_sandstone'],
+  cobblestone: ['cobblestone', 'stone'],
+  cobble: ['cobblestone', 'stone'],
+  stone: ['stone', 'cobblestone']
+}
+
+function isAirBlock(b) {
+  const n = bareName(b && b.name)
+  return !b || n === 'air' || n === 'cave_air' || n === 'void_air'
+}
+
+export async function leaveRoof(bot, state) {
+  const p = bot.entity && bot.entity.position
+  if (!p) return false
+  const fx = Math.floor(p.x)
+  const fy = Math.floor(p.y)
+  const fz = Math.floor(p.z)
+  let ground = fy
+  for (let y = fy - 1; y >= fy - 16; y--) {
+    let b = null
+    let a = null
+    try {
+      b = bot.blockAt(new Vec3(fx, y, fz))
+      a = bot.blockAt(new Vec3(fx, y + 1, fz))
+    } catch {}
+    if (b && isSolid(b) && isAirBlock(a)) { ground = y + 1; break }
+  }
+  const drop = fy - ground
+  if (drop < 2) return false
+  plog('leave roof y=' + fy + ' ground=' + ground + ' drop=' + drop + ' toward camp 32,0')
+  state.note = 'off roof y=' + fy + ' -> camp'
+  const dirs = [[1, 0], [2, 0], [1, 1], [1, -1], [0, 1], [0, -1], [-1, 0], [3, 0], [4, 0]]
+  for (const [dx, dz] of dirs) {
+    const nx = fx + dx
+    const nz = fz + dz
+    let at = null
+    let below = null
+    try {
+      at = bot.blockAt(new Vec3(nx, fy, nz))
+      below = bot.blockAt(new Vec3(nx, fy - 1, nz))
+    } catch {}
+    if (!isAirBlock(at)) continue
+    if (isSolid(below) && !isPlayerBuilt(below)) continue
+    try { await gotoNear(bot, nx + 0.5, fy - 1, nz + 0.5, 1, 3500) } catch {}
+    return true
+  }
+  try { await gotoNear(bot, 32, Math.max(ground, fy - 6), 0, 3, 8000) } catch {}
+  return true
 }
 
 export async function leaveSpawnForGather(bot, state) {
-  const r0 = horizFromOrigin(bot)
-  if (r0 >= SPAWN_SAFE_R) return true
   const p = bot.entity && bot.entity.position
   if (!p) return false
-  // Camp origin (32, 0) is r=32, east of spawn — first build site.
+  try { await leaveRoof(bot, state) } catch {}
+  const r0 = horizFromOrigin(bot)
+  if (r0 >= SPAWN_SAFE_R && (p.y < 110)) return true
   const tx = 32
   const tz = 0
-  plog('collect leave-spawn r=' + r0.toFixed(1) + ' -> camp 32,0')
+  plog('collect leave-spawn r=' + r0.toFixed(1) + ' y=' + p.y.toFixed(1) + ' -> camp 32,0')
   state.phase = 'leave-spawn'
   state.note = 'leaving spawn toward camp 32,0'
   stopPath(bot)

@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { Vec3, plog, sleep, bareName, countNamed, resolveItemName, eachInventoryItem, gotoNear, findItemByNames, isPlayerBuilt, horizFromOrigin, SPAWN_SAFE_R } from './lib.js'
+import { withChestLock } from './cluster.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FILE = path.join(__dirname, '..', 'rl', 'storage.json')
@@ -38,6 +39,8 @@ function empty() {
     camp: { x: CAMP_XZ.x, y: null, z: CAMP_XZ.z, r: 32 },
     farms: {},
     chests: [],
+    targets: { dirt: 32, cobblestone: 16, logs: 8, food: 8, sand: 8, wheat_seeds: 16 },
+    missing: {},
     updated: new Date().toISOString()
   }
 }
@@ -91,7 +94,7 @@ export function campOriginFromDisk() {
   return { x: CAMP_XZ.x, y: s.camp && s.camp.y, z: CAMP_XZ.z }
 }
 
-function extrasToDump(bot) {
+export function extrasToDump(bot) {
   const out = []
   eachInventoryItem(bot, (it) => {
     const n = resolveItemName(bot, it)
@@ -142,29 +145,31 @@ export async function depositExtras(bot, state) {
     return false
   }
   recordChest(chest.position)
-  try { await gotoNear(bot, chest.position.x, chest.position.y, chest.position.z, 2, 8000) } catch {}
-  if (!bot.openContainer && !bot.openChest) {
-    plog('storage no openContainer')
-    return false
-  }
-  try {
-    const win = bot.openContainer ? await bot.openContainer(chest) : await bot.openChest(chest)
-    let dumped = 0
-    for (const ex of extras) {
-      try {
-        if (typeof win.deposit === 'function') {
-          await win.deposit(ex.item.type, ex.item.metadata == null ? null : ex.item.metadata, ex.count)
-          dumped += ex.count
-        }
-      } catch (err) {
-        plog('storage deposit fail ' + ex.name + ' ' + (err && err.message))
-      }
+  return withChestLock(async () => {
+    try { await gotoNear(bot, chest.position.x, chest.position.y, chest.position.z, 2, 8000) } catch {}
+    if (!bot.openContainer && !bot.openChest) {
+      plog('storage no openContainer')
+      return false
     }
-    try { win.close() } catch {}
-    plog('storage dumped=' + dumped + ' into chest')
-    return dumped > 0
-  } catch (err) {
-    plog('storage open fail ' + (err && err.message))
-    return false
-  }
+    try {
+      const win = bot.openContainer ? await bot.openContainer(chest) : await bot.openChest(chest)
+      let dumped = 0
+      for (const ex of extras) {
+        try {
+          if (typeof win.deposit === 'function') {
+            await win.deposit(ex.item.type, ex.item.metadata == null ? null : ex.item.metadata, ex.count)
+            dumped += ex.count
+          }
+        } catch (err) {
+          plog('storage deposit fail ' + ex.name + ' ' + (err && err.message))
+        }
+      }
+      try { win.close() } catch {}
+      plog('storage dumped=' + dumped + ' into chest')
+      return dumped > 0
+    } catch (err) {
+      plog('storage open fail ' + (err && err.message))
+      return false
+    }
+  })
 }
