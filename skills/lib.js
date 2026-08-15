@@ -107,17 +107,87 @@ export function inventorySummary(bot) {
   return parts.length ? parts.join(',') : 'empty'
 }
 
+export function isLogName(name) {
+  const n = bareName(name)
+  if (!n || n.includes('planks') || n.includes('stripped')) return false
+  return n.endsWith('_log') || n === 'log' || n.endsWith('_stem')
+}
+
+export function isPlankName(name) {
+  const n = bareName(name)
+  return !!n && n.includes('planks')
+}
+
+export function countLogs(bot) {
+  let n = 0
+  eachInventoryItem(bot, (it) => {
+    if (isLogName(resolveItemName(bot, it))) n += Number(it.count) || 0
+  })
+  return n
+}
+
+export function countPlanks(bot) {
+  let n = 0
+  eachInventoryItem(bot, (it) => {
+    if (isPlankName(resolveItemName(bot, it))) n += Number(it.count) || 0
+  })
+  return n
+}
+
+export function findItemByNames(bot, names) {
+  const set = new Set((names || []).map(bareName))
+  let found = null
+  eachInventoryItem(bot, (it) => {
+    if (found) return
+    if (set.has(resolveItemName(bot, it))) found = it
+  })
+  return found
+}
+
+export function looksLikeTree(bot, block) {
+  if (!block || !block.position) return false
+  if (!isLogName(block.name)) return false
+  const p = block.position
+  for (let dy = -1; dy <= 5; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        let b = null
+        try { b = bot.blockAt(p.offset(dx, dy, dz)) } catch {}
+        const n = bareName(b && b.name)
+        if (n.includes('leaves') || n.includes('leaf')) return true
+      }
+    }
+  }
+  return false
+}
+
+export async function gotoNear(bot, x, y, z, range = 3, ms = 8000) {
+  if (!bot.pathfinder || !goals || !goals.GoalNear) return false
+  try {
+    const g = new goals.GoalNear(x, y, z, range)
+    const pth = bot.pathfinder.goto(g)
+    const t = sleep(ms).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
+    await Promise.race([pth, t])
+    return true
+  } catch {
+    try { bot.pathfinder.setGoal(null) } catch {}
+    return false
+  }
+}
+
 export function isPlayerBuilt(b) {
   if (!b || !b.name) return false
   const n = bareName(b.name)
   if (SAND_ITEMS.has(n) || n === 'dirt' || n === 'grass_block' || n === 'gravel' || n === 'sandstone') return false
-  if (n.includes('planks') || n.endsWith('_log') || n.endsWith('_wood') || n.endsWith('_stem') || n.endsWith('_hyphae')) return true
+  if (isLogName(n)) return false
+  if (n.includes('planks') || n.endsWith('_wood') || n.endsWith('_hyphae')) return true
   if (n.includes('door') || n.includes('chest') || n.includes('trapdoor') || n.includes('fence') || n.includes('gate')) return true
   if (n.includes('stairs') || n.includes('slab') || n.includes('sign') || n.includes('bed') || n.includes('banner')) return true
   if (n.includes('glass') || n.includes('wool') || n.includes('terracotta') || n.endsWith('_concrete')) return true
   if (n === 'crafting_table' || n === 'furnace' || n === 'blast_furnace' || n === 'smoker' || n === 'barrel' || n === 'hopper') return true
   if (n === 'torch' || n === 'wall_torch' || n === 'lantern' || n === 'ladder' || n === 'scaffolding' || n === 'bookshelf') return true
-  if (n === 'cobblestone' || n.includes('wood') || n.includes('log')) return true
+  if (n === 'cobblestone') return true
+  if (n.includes('wood') && !isLogName(n)) return true
   return false
 }
 

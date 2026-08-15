@@ -1,4 +1,4 @@
-import { Vec3, goals, pathfinderPkg, plog, sleep, posOf, bareName, countSand, countNamed, inventorySummary, horizFromOrigin, isPlayerBuilt, isSandBlock, stopPath, sayAllowed, SPAWN_SAFE_R, SAND_SCAN_R } from './lib.js'
+import { Vec3, goals, pathfinderPkg, plog, sleep, posOf, bareName, countSand, countNamed, inventorySummary, horizFromOrigin, isPlayerBuilt, isSandBlock, isLogName, looksLikeTree, stopPath, sayAllowed, SPAWN_SAFE_R, SAND_SCAN_R } from './lib.js'
 
 function applyCollectMovements(bot) {
   try {
@@ -17,7 +17,8 @@ function applyCollectMovements(bot) {
         for (const key of Object.keys(names)) {
           const rec = names[key]
           if (!rec || rec.id == null) continue
-          if (isPlayerBuilt({ name: key }) || String(key).includes('planks') || String(key).includes('oak')) {
+          if (isLogName(key)) continue
+          if (isPlayerBuilt({ name: key }) || String(key).includes('planks')) {
             mv.blocksCantBreak.add(rec.id)
           }
         }
@@ -34,7 +35,7 @@ function applyCollectMovements(bot) {
   }
 }
 
-async function collectViaPlugin(bot, target, label, ms = 15000) {
+export async function collectViaPlugin(bot, target, label, ms = 15000, opts = {}) {
   if (!target) return false
   if (!bot.collectBlock || typeof bot.collectBlock.collect !== 'function') {
     plog('collect() missing plugin')
@@ -45,7 +46,16 @@ async function collectViaPlugin(bot, target, label, ms = 15000) {
     plog('collect() skip spawn ' + label)
     return false
   }
-  if (target.name && (isPlayerBuilt(target) || String(target.name).includes('planks'))) {
+  const tname = bareName(target.name)
+  if (tname.includes('planks')) {
+    plog('collect() skip planks ' + target.name)
+    return false
+  }
+  if (isLogName(tname) && !looksLikeTree(bot, target) && !opts.allowLog) {
+    plog('collect() skip log without leaves ' + target.name)
+    return false
+  }
+  if (target.name && isPlayerBuilt(target) && !isLogName(tname)) {
     plog('collect() skip player-built ' + target.name)
     return false
   }
@@ -102,7 +112,7 @@ export function findSand(bot, maxDistance = SAND_SCAN_R) {
   return best
 }
 
-async function exploreNewDir(bot, state) {
+export async function exploreNewDir(bot, state) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
   const last = state.lastSandPos

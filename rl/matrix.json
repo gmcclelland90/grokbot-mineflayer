@@ -1,6 +1,6 @@
 {
   "current": "p5-sand",
-  "updated": "2026-08-15T02:17:00Z",
+  "updated": "2026-08-15T02:40:00Z",
   "loop": "attempt current skill -> score episode -> mark pass/fail -> stay or advance",
   "skills": [
     {
@@ -43,7 +43,7 @@
       ],
       "attempts": 3,
       "last_score": null,
-      "note": "food_inv=2 at -6.7 93 53.6 following Har0x, 2026-08-15 12:01 AEST"
+      "note": "passed via meat (food_inv=2 following Har0x); food.js skill + auto-eat live, 2026-08-15 12:40 AEST"
     },
     {
       "id": "p5-sand",
@@ -54,7 +54,7 @@
       ],
       "attempts": 1,
       "last_score": null,
-      "note": "skills/ escape+collect wired; no auto-follow; hunt sand r>=24; 2026-08-15 12:17 AEST"
+      "note": "skills/ collect+craft live; hunt sand r>=24; inv empty so still gathering; 2026-08-15 12:40 AEST"
     },
     {
       "id": "p6-sandstone",
@@ -65,7 +65,7 @@
       ],
       "attempts": 0,
       "last_score": null,
-      "note": ""
+      "note": "craft.js ready (!craft sandstone) once sand>=4"
     },
     {
       "id": "p7-place-one",
@@ -76,7 +76,7 @@
       ],
       "attempts": 0,
       "last_score": null,
-      "note": ""
+      "note": "place.js ready (!place) r>=24"
     },
     {
       "id": "p8-wall",
@@ -126,13 +126,13 @@
     {
       "id": "p12-wood",
       "name": "Tree, plank, crafting table",
-      "status": "todo",
+      "status": "doing",
       "deps": [
         "p3-stack-8"
       ],
-      "attempts": 0,
+      "attempts": 1,
       "last_score": null,
-      "note": ""
+      "note": "wood.js+craft.js wired (!wood !table); inv has no logs yet; punch trees r>=24, never grief planks; 2026-08-15 12:40 AEST"
     },
     {
       "id": "p13-shovel",
@@ -143,7 +143,7 @@
       ],
       "attempts": 0,
       "last_score": null,
-      "note": ""
+      "note": "craft.js ready (!shovel !pick) after table"
     },
     {
       "id": "p14-play",
@@ -180,7 +180,7 @@
       ],
       "attempts": 1,
       "last_score": null,
-      "note": "listener live pid=560984; hey/come/follow/stop kept after collectblock patch; food+9 dirt kept, 2026-08-15 11:44 AEST"
+      "note": "listener live; !come !follow !stop !stay !collect !hungry !craft !wood !place !table !shovel !pick; 2026-08-15 12:40 AEST"
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { plog, sayAllowed, countNamed } from './lib.js'
+import { tryEat, countFood } from './food.js'
 
 const COME_PHRASES = /\bover here\b|\bthis way\b|\bcome look\b|\bcome see\b|\blook here\b/
 
@@ -23,6 +24,13 @@ export function parseLocalCmd(text) {
   if (core === 'hungry' || core === 'eat' || core === 'food') return { cmd: 'hungry' }
   const col = core.match(/^collect(?:\s+([a-z0-9_]+))?$/)
   if (col) return { cmd: 'collect', block: col[1] || 'sand' }
+  const craftM = core.match(/^craft(?:\s+([a-z0-9_]+))?$/)
+  if (craftM) return { cmd: 'craft', item: craftM[1] || 'sandstone' }
+  if (core === 'wood' || core === 'tree' || core === 'chop' || core === 'logs') return { cmd: 'wood' }
+  if (core === 'place') return { cmd: 'place' }
+  if (core === 'table' || core === 'crafting table' || core === 'crafting_table' || core === 'workbench') return { cmd: 'table' }
+  if (core === 'shovel' || core === 'wooden shovel' || core === 'wooden_shovel') return { cmd: 'shovel' }
+  if (core === 'pick' || core === 'pickaxe' || core === 'wooden pick' || core === 'wooden pickaxe' || core === 'wooden_pickaxe') return { cmd: 'pick' }
   if (/\b(hi|hey|hello)\b/.test(t)) return { cmd: 'hi' }
   return null
 }
@@ -36,18 +44,15 @@ export function cmdName(cmd) {
 export async function sayHungry(bot, state) {
   let food = 20
   try { if (bot.food != null) food = Number(bot.food) } catch {}
-  const inv = countNamed(bot, [
-    'sweet_berries', 'glow_berries', 'apple', 'bread',
-    'carrot', 'potato', 'baked_potato', 'melon_slice',
-    'porkchop', 'cooked_porkchop', 'beef', 'cooked_beef',
-    'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton'
-  ])
+  const inv = countFood(bot)
   try {
-    if (food < 18 && bot.autoEat && typeof bot.autoEat.eat === 'function' && inv > 0) {
-      await bot.autoEat.eat()
-      sayAllowed(bot, state, 'eating')
-      plog('cmd hungry ate food=' + bot.food)
-      return
+    if (food < 18 && inv > 0) {
+      const ate = await tryEat(bot)
+      if (ate) {
+        sayAllowed(bot, state, 'eating')
+        plog('cmd hungry ate food=' + bot.food)
+        return
+      }
     }
   } catch (err) {
     plog('cmd hungry eat fail ' + (err && err.message))

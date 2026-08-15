@@ -33,7 +33,8 @@ P1 done (2026-08-15): tool, armor-manager, statemachine loaded. skills/ escape c
 P2 done (2026-08-15): nested BotStateMachine (idle, escape, follow, collect, flee).
     !come !follow !stop !stay !collect [block] !hungry (bang optional; over here=come).
     Talk short, no coord spam, no plank grief, spawn r>=24. No auto-follow Har0x.
-P3 next: food + wood + tools via those skills (climb matrix p4-p13).
+P3 done (2026-08-15): skills/food.js wood.js craft.js place.js. SM states wood/craft/place.
+    !craft [item] !wood !place !table !shovel !pick. Matrix climb p5-sand + p12-wood; do not skip hut.
 P4: schematic/builder for the hut and bigger builds.
 P5: other-bot protocol (chat !commands, share coords, don't grief each other).
 P6: free play. Brain only sets goals. Hands run forever.
