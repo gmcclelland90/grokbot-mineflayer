@@ -299,6 +299,38 @@ export async function leaveRoof(bot, state) {
   return true
 }
 
+function applyLeaveMovements(bot) {
+  try {
+    const Movements = pathfinderPkg.Movements
+    if (!Movements || !bot.pathfinder) return
+    const mv = new Movements(bot)
+    mv.canDig = false
+    mv.allow1by1towers = false
+    mv.allowParkour = false
+    mv.allowSprinting = false
+    mv.maxDropDown = 3
+    mv.scafoldingBlocks = []
+    bot.pathfinder.setMovements(mv)
+  } catch {}
+}
+
+async function walkTowardCamp(bot, ms = 2500) {
+  const here = bot.entity && bot.entity.position
+  if (!here) return
+  try {
+    const yaw = Math.atan2(-(32 - here.x), (0 - here.z))
+    await bot.look(yaw, 0, true)
+    bot.setControlState('forward', true)
+    bot.setControlState('sprint', false)
+    bot.setControlState('jump', false)
+    await sleep(ms)
+  } catch {}
+  try {
+    bot.setControlState('forward', false)
+    bot.setControlState('jump', false)
+  } catch {}
+}
+
 export async function leaveSpawnForGather(bot, state) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
@@ -310,29 +342,29 @@ export async function leaveSpawnForGather(bot, state) {
   plog('collect leave-spawn r=' + r0.toFixed(1) + ' y=' + p.y.toFixed(1) + ' -> camp 32,0')
   state.phase = 'leave-spawn'
   state.note = 'leaving spawn toward camp 32,0'
+  applyLeaveMovements(bot)
   if (isPerch(bot)) {
     try { await leaveRoof(bot, state) } catch (err) { plog('leave roof fail ' + (err && err.message)) }
   }
-  // 08aa544: dirt/grass is not a roof. Must still walk to camp — do not no-op at y>=100.
-  if (!isPerch(bot) && bot.pathfinder && goals && goals.GoalXZ) {
-    try {
-      const g = new goals.GoalXZ(tx, tz)
-      const pth = bot.pathfinder.goto(g)
-      const t = sleep(10000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
-      await Promise.race([pth, t])
-    } catch {
-      try { bot.pathfinder.setGoal(null) } catch {}
+  // Step via near-goals so village / 3-high grass hills do not no-op GoalXZ.
+  if (!isPerch(bot) && bot.pathfinder && goals) {
+    const spots = [[24, 0], [28, 0], [32, 0], [24, 8], [20, -8]]
+    for (const [wx, wz] of spots) {
+      if (horizFromOrigin(bot) >= SPAWN_SAFE_R && !isPerch(bot)) break
+      const cur = bot.entity && bot.entity.position
+      if (!cur) break
       try {
-        const here = bot.entity && bot.entity.position
-        if (here && Math.hypot(here.x - p.x, here.z - p.z) < 0.5) {
-          const yaw = Math.atan2(-(tx - here.x), (tz - here.z))
-          await bot.look(yaw, 0, true)
-          bot.setControlState('forward', true)
-          await sleep(1600)
-          bot.setControlState('forward', false)
-        }
-      } catch {}
+        const g = goals.GoalNear ? new goals.GoalNear(wx, Math.floor(cur.y), wz, 2) : new goals.GoalXZ(wx, wz)
+        const pth = bot.pathfinder.goto(g)
+        const t = sleep(5000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
+        await Promise.race([pth, t])
+      } catch {
+        try { bot.pathfinder.setGoal(null) } catch {}
+      }
     }
+  }
+  if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
+    await walkTowardCamp(bot, 2500)
   }
   const here = bot.entity && bot.entity.position
   const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R && here && !isPerch(bot)

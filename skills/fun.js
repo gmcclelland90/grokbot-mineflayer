@@ -10,7 +10,7 @@ import { claimNextJob, runClaimedJob, finishJob } from './jobs.js'
 import { lookAtNearest } from './look.js'
 import { goToSleep, wakeUp, shouldSleep, isNightOrThunder } from './sleep.js'
 
-const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'camp', 'farm', 'sleep', 'guard', 'gather', 'chest', 'store', 'withdraw'])
+const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'camp', 'farm', 'sleep', 'guard', 'gather', 'chest', 'store', 'withdraw', 'dump'])
 const DOODLE_ITEMS = ['dirt', 'grass_block', 'sand', 'red_sand', 'sandstone', 'cobblestone']
 const SOCIAL_CD_MS = 60000
 const SOCIAL_LINES = ['hi', 'hey', 'found dirt', 'looking around', 'nice spot']
@@ -103,6 +103,7 @@ function pickGoal(bot, state) {
   const campNeed = campSolidCount()
   if (!state.funStarted) {
     state.funStarted = true
+    if (!state.campBuilt && countBuildMaterials(bot) >= 8) return 'camp'
     return 'job'
   }
   if (Object.keys(missingTargets(bot) || {}).length) return 'gather'
@@ -291,6 +292,11 @@ export async function funTick(bot, state) {
   try {
     const job = await claimNextJob(bot, state)
     if (job) {
+      if (!state.campBuilt && countBuildMaterials(bot) >= 8 && job.id !== 'place-camp' && job.type !== 'build' && job.type !== 'dump') {
+        try { await finishJob(job, false) } catch {}
+        mark(bot, state, 'camp', 'prefer camp over ' + job.id)
+        return campOnce(bot, state)
+      }
       mark(bot, state, job.type || 'job', 'job ' + job.id)
       const ok = await runClaimedJob(bot, state, job)
       await finishJob(job, ok)

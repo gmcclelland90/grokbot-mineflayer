@@ -128,8 +128,10 @@ async function equipBuild(bot, item) {
 }
 
 function groundY(bot, x, z, guess) {
-  const g = Math.floor(guess)
-  for (let y = g + 4; y >= g - 10; y--) {
+  const g = Math.floor(guess != null ? guess : 80)
+  const hi = Math.max(g + 8, 128)
+  const lo = Math.min(g - 32, 40)
+  for (let y = hi; y >= lo; y--) {
     let b = null
     let a = null
     try {
@@ -279,6 +281,12 @@ async function placeSolids(bot, state, want, solids, origin) {
     const here = bot.entity && bot.entity.position
     if (here && here.distanceTo(new Vec3(x + 0.5, y, z + 0.5)) > 4.2) {
       try { await gotoNear(bot, x, y, z, 3, 4000) } catch {}
+    }
+    const here2 = bot.entity && bot.entity.position
+    if (here2 && here2.distanceTo(new Vec3(x + 0.5, y, z + 0.5)) > 5.5) {
+      plog('build skip far ' + x + ' ' + y + ' ' + z)
+      missing++
+      continue
     }
     const res = await placeAt(bot, x, y, z)
     if (res === true) placed++

@@ -2276,7 +2276,7 @@ export function startPlayLoop(bot) {
       return
     }
     if (name === 'commands' || name === 'help') {
-      const line = 'come follow stop collect wood craft place table shovel pick hungry build hut camp farm gather chest store withdraw sleep guard'
+      const line = 'come follow stop collect wood craft place table shovel pick hungry build hut camp farm gather chest store withdraw dump sleep guard'
       try { bot.chat(line) } catch {}
       plog('commands-live ' + line)
       return
@@ -2380,6 +2380,17 @@ export function startPlayLoop(bot) {
       chat('on it')
       plog('chat cmd gather ' + (state.gatherName || 'stock') + ' from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'gather', note: 'chat gather ' + (state.gatherName || 'stock') }))
+      return
+    }
+    if (name === 'dump') {
+      state.chatMode = 'chest'
+      state.chestAction = 'dump'
+      state.chatUser = parsedUser || ''
+      state.chatExtra = extra || null
+      stopPath(bot)
+      chat('on it')
+      plog('chat cmd dump from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { phase: 'dump', note: 'chat dump chests at camp' }))
       return
     }
     if (name === 'chest' || name === 'store' || name === 'withdraw') {
@@ -2544,21 +2555,28 @@ export function startPlayLoop(bot) {
   })
   plog('chat listener on (chat/whisper/messagestr) log=' + CHAT_LOG)
   try { wireChatter(bot, state) } catch (err) { plog('chatter wire fail ' + (err && err.message)) }
-  plog('commands-live come follow stop collect wood craft place table shovel pick hungry build hut camp farm gather chest store withdraw sleep guard')
+  plog('commands-live come follow stop collect wood craft place table shovel pick hungry build hut camp farm gather chest store withdraw dump sleep guard')
 
+  function applyCommandFile(file, label) {
+    if (!fs.existsSync(file)) return
+    const raw = fs.readFileSync(file, 'utf8').trim()
+    try { fs.unlinkSync(file) } catch { try { fs.writeFileSync(file, '') } catch {} }
+    if (!raw) return
+    const obj = JSON.parse(raw)
+    const dest = obj.to || obj.for || obj.username
+    if (dest && String(dest).toLowerCase() !== String(bot.username || '').toLowerCase()) return
+    const action = String(obj.action || '').toLowerCase()
+    plog(label + ' action=' + action)
+    if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry' || action === 'craft' || action === 'wood' || action === 'place' || action === 'table' || action === 'shovel' || action === 'pick' || action === 'build' || action === 'hut' || action === 'camp' || action === 'farm' || action === 'gather' || action === 'chest' || action === 'store' || action === 'withdraw' || action === 'dump' || action === 'commands' || action === 'help' || action === 'sleep' || action === 'guard') {
+      const mapped = action === 'stop' ? 'stay' : action
+      applyChatCmd({ cmd: mapped, block: obj.block || obj.item, item: obj.item || obj.block, user: obj.user, text: obj.text, name: obj.name || obj.block, kind: obj.kind || obj.name, on: obj.on, count: obj.count }, obj.user || state.chatUser || 'har0x', obj)
+    }
+  }
+  const myCommandFile = path.join(__dirname, 'rl', 'command-' + String(bot.username || 'Steve') + '.json')
   const cmdPoll = setInterval(() => {
     try {
-      if (!fs.existsSync(COMMAND_FILE)) return
-      const raw = fs.readFileSync(COMMAND_FILE, 'utf8').trim()
-      try { fs.unlinkSync(COMMAND_FILE) } catch { try { fs.writeFileSync(COMMAND_FILE, '') } catch {} }
-      if (!raw) return
-      const obj = JSON.parse(raw)
-      const action = String(obj.action || '').toLowerCase()
-      plog('command.json action=' + action)
-      if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry' || action === 'craft' || action === 'wood' || action === 'place' || action === 'table' || action === 'shovel' || action === 'pick' || action === 'build' || action === 'hut' || action === 'camp' || action === 'farm' || action === 'gather' || action === 'chest' || action === 'store' || action === 'withdraw' || action === 'commands' || action === 'help' || action === 'sleep' || action === 'guard') {
-        const mapped = action === 'stop' ? 'stay' : action
-        applyChatCmd({ cmd: mapped, block: obj.block || obj.item, item: obj.item || obj.block, user: obj.user, text: obj.text, name: obj.name || obj.block, kind: obj.kind || obj.name, on: obj.on, count: obj.count }, obj.user || state.chatUser || 'har0x', obj)
-      }
+      applyCommandFile(myCommandFile, 'command-' + String(bot.username || 'Steve') + '.json')
+      applyCommandFile(COMMAND_FILE, 'command.json')
     } catch (err) {
       plog('command.json fail ' + (err && err.message))
     }

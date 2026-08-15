@@ -34,15 +34,88 @@ const KEEP = {
   chest: 1
 }
 
+export const ROLES = ['terrain', 'stone', 'wood', 'food', 'misc']
+export const DUMP_LABELS = {
+  terrain: 'dirt/sand',
+  stone: 'cobble/stone',
+  wood: 'wood/logs/planks',
+  food: 'food/seeds',
+  misc: 'misc'
+}
+// North of the 7x7 palisade so dump chests do not eat wall cells.
+export const DUMP_PLAN = [
+  { role: 'terrain', dx: 1, dz: -1, label: DUMP_LABELS.terrain },
+  { role: 'stone', dx: 3, dz: -1, label: DUMP_LABELS.stone },
+  { role: 'wood', dx: 5, dz: -1, label: DUMP_LABELS.wood },
+  { role: 'food', dx: 7, dz: -1, label: DUMP_LABELS.food },
+  { role: 'misc', dx: 9, dz: -1, label: DUMP_LABELS.misc }
+]
+
+function defaultDumpPlan() {
+  return DUMP_PLAN.map((s) => ({ role: s.role, dx: s.dx, dz: s.dz, label: s.label }))
+}
+
 function empty() {
   return {
     camp: { x: CAMP_XZ.x, y: null, z: CAMP_XZ.z, r: 32 },
     farms: {},
     chests: [],
+    dumpPlan: defaultDumpPlan(),
     targets: { dirt: 32, cobblestone: 16, logs: 8, food: 8, sand: 8, wheat_seeds: 16 },
     missing: {},
     updated: new Date().toISOString()
   }
+}
+
+export function roleForItem(name) {
+  const n = bareName(name)
+  if (!n) return 'misc'
+  if (n === 'dirt' || n === 'grass_block' || n === 'coarse_dirt' || n === 'podzol' || n === 'mud' || n === 'clay' || n === 'gravel' || n === 'sand' || n === 'red_sand' || n.includes('sand')) return 'terrain'
+  if (n === 'cobblestone' || n === 'stone' || n === 'andesite' || n === 'diorite' || n === 'granite' || n === 'cobbled_deepslate' || n.endsWith('_ore') || (n.includes('stone') && !n.includes('sandstone') && !n.includes('redstone'))) return 'stone'
+  if (n.includes('log') || n.includes('stem') || n.includes('plank') || n.includes('sapling') || n === 'stick' || n.endsWith('_wood')) return 'wood'
+  if (n.includes('seed') || n.includes('wheat') || n.includes('carrot') || n.includes('potato') || n.includes('beetroot') || n.includes('berry') || n.includes('bread') || n.includes('apple') || n.includes('beef') || n.includes('pork') || n.includes('chicken') || n.includes('mutton') || n.includes('cod') || n.includes('salmon') || n.includes('flesh') || n === 'bowl' || n.includes('stew') || n.includes('soup')) return 'food'
+  return 'misc'
+}
+
+export function plannedDumpSlots(origin) {
+  const ox = (origin && origin.x != null) ? origin.x : CAMP_XZ.x
+  const oz = (origin && origin.z != null) ? origin.z : CAMP_XZ.z
+  const oy = (origin && origin.y != null) ? origin.y : null
+  return DUMP_PLAN.map((s) => ({
+    role: s.role,
+    label: s.label,
+    x: ox + s.dx,
+    y: oy,
+    z: oz + s.dz
+  }))
+}
+
+function sameBlock(a, x, y, z) {
+  return a && a.x === x && a.y === y && a.z === z
+}
+
+export function assignChestRoles(s) {
+  const data = s || loadStorage()
+  data.chests = data.chests || []
+  data.dumpPlan = data.dumpPlan && data.dumpPlan.length ? data.dumpPlan : defaultDumpPlan()
+  const origin = data.camp || { x: CAMP_XZ.x, y: null, z: CAMP_XZ.z }
+  const slots = plannedDumpSlots(origin)
+  const used = new Set(data.chests.filter((c) => c && c.role).map((c) => c.role))
+  for (const c of data.chests) {
+    if (!c) continue
+    if (!c.role) {
+      const hit = slots.find((sl) => sl.x === c.x && sl.z === c.z)
+      if (hit) c.role = hit.role
+      else {
+        const next = ROLES.find((r) => !used.has(r)) || 'misc'
+        c.role = next
+      }
+    }
+    used.add(c.role)
+    if (c.items == null) c.items = {}
+    if (!c.lastSeen) c.lastSeen = null
+  }
+  return data
 }
 
 export function loadStorage() {
@@ -54,7 +127,8 @@ export function loadStorage() {
 }
 
 export function saveStorage(data) {
-  const out = data || empty()
+  const out = assignChestRoles(data || empty())
+  if (!out.dumpPlan) out.dumpPlan = defaultDumpPlan()
   out.updated = new Date().toISOString()
   try { fs.writeFileSync(FILE, JSON.stringify(out, null, 2) + '\n') } catch (err) {
     plog('storage write fail ' + (err && err.message))
@@ -64,7 +138,9 @@ export function saveStorage(data) {
 
 export function markCamp(origin) {
   const s = loadStorage()
-  s.camp = { x: origin.x, y: origin.y, z: origin.z, r: Math.hypot(origin.x, origin.z) }
+  const y = origin && origin.y != null ? origin.y : (s.camp && s.camp.y)
+  // Camp origin is fixed: 32, surface, 0. Never drift to a stub foothold.
+  s.camp = { x: CAMP_XZ.x, y, z: CAMP_XZ.z, r: 32 }
   return saveStorage(s)
 }
 
@@ -75,17 +151,33 @@ export function markFarm(kind, origin) {
   return saveStorage(s)
 }
 
-export function recordChest(pos) {
+export function recordChest(pos, extra) {
   if (!pos) return loadStorage()
   const s = loadStorage()
   s.chests = s.chests || []
   const x = Math.floor(pos.x)
   const y = Math.floor(pos.y)
   const z = Math.floor(pos.z)
-  if (!s.chests.some((c) => c.x === x && c.y === y && c.z === z)) {
-    s.chests.push({ x, y, z })
+  let row = s.chests.find((c) => sameBlock(c, x, y, z))
+  if (!row) {
+    row = { x, y, z, role: extra && extra.role, items: (extra && extra.items) || {}, lastSeen: (extra && extra.lastSeen) || null }
+    s.chests.push(row)
   }
+  if (extra && extra.role) row.role = extra.role
+  if (extra && extra.items) row.items = extra.items
+  if (extra && extra.lastSeen) row.lastSeen = extra.lastSeen
+  if (!row.role) {
+    const hit = plannedDumpSlots(s.camp).find((sl) => sl.x === x && sl.z === z)
+    row.role = (hit && hit.role) || roleForItem((extra && extra.hint) || '')
+  }
+  if (row.items == null) row.items = {}
   return saveStorage(s)
+}
+
+export function chestByRole(role) {
+  const s = assignChestRoles(loadStorage())
+  const want = String(role || '').toLowerCase()
+  return (s.chests || []).find((c) => c && c.role === want) || null
 }
 
 export function campOriginFromDisk() {
@@ -107,28 +199,55 @@ export function extrasToDump(bot) {
   return out
 }
 
-export function findNearChest(bot, origin, maxD = 12) {
-  const here = (origin && new Vec3(origin.x, origin.y || 64, origin.z)) || (bot.entity && bot.entity.position)
-  if (!here) return null
+function isChestName(n) {
+  return n === 'chest' || n === 'trapped_chest' || n === 'barrel'
+}
+
+function blockAtChest(bot, c) {
+  if (!c || c.y == null) return null
   try {
-    const block = bot.findBlock({
-      matching: (b) => {
-        const n = bareName(b && b.name)
-        return n === 'chest' || n === 'trapped_chest' || n === 'barrel'
-      },
-      maxDistance: maxD,
-      point: here
-    })
-    if (block) return block
+    const b = bot.blockAt(new Vec3(c.x, c.y, c.z))
+    if (isChestName(bareName(b && b.name))) return b
   } catch {}
-  const s = loadStorage()
+  return null
+}
+
+export function findChestForRole(bot, role, origin, maxD = 24) {
+  const s = assignChestRoles(loadStorage())
+  const want = String(role || 'misc').toLowerCase()
+  const row = (s.chests || []).find((c) => c && c.role === want)
+  const fromRow = blockAtChest(bot, row)
+  if (fromRow) return fromRow
+  const here = (origin && new Vec3(origin.x, origin.y || 64, origin.z)) || (bot.entity && bot.entity.position)
+  if (here) {
+    try {
+      const block = bot.findBlock({
+        matching: (b) => isChestName(bareName(b && b.name)),
+        maxDistance: maxD,
+        point: here
+      })
+      if (block) return block
+    } catch {}
+  }
+  for (const fallback of ['misc', 'terrain', 'stone', 'wood', 'food']) {
+    if (fallback === want) continue
+    const alt = (s.chests || []).find((c) => c && c.role === fallback)
+    const b = blockAtChest(bot, alt)
+    if (b) return b
+  }
   for (const c of s.chests || []) {
-    let b = null
-    try { b = bot.blockAt(new Vec3(c.x, c.y, c.z)) } catch {}
-    const n = bareName(b && b.name)
-    if (n === 'chest' || n === 'trapped_chest' || n === 'barrel') return b
+    const b = blockAtChest(bot, c)
+    if (b) return b
   }
   return null
+}
+
+export function findChestForItem(bot, itemName, origin, maxD = 24) {
+  return findChestForRole(bot, roleForItem(itemName), origin, maxD)
+}
+
+export function findNearChest(bot, origin, maxD = 12) {
+  return findChestForRole(bot, 'misc', origin, maxD)
 }
 
 export async function depositExtras(bot, state) {

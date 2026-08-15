@@ -1,5 +1,9 @@
-import { Vec3, plog, sleep, bareName, resolveItemName, eachInventoryItem, findItemByNames, gotoNear, horizFromOrigin, SPAWN_SAFE_R } from './lib.js'
-import { loadStorage, saveStorage, recordChest, findNearChest, extrasToDump, campOriginFromDisk } from './storage.js'
+import { Vec3, plog, sleep, bareName, resolveItemName, eachInventoryItem, findItemByNames, gotoNear, horizFromOrigin, SPAWN_SAFE_R, countNamed, countLogs, countPlanks, inventorySummary } from './lib.js'
+import { loadStorage, saveStorage, recordChest, findNearChest, findChestForRole, findChestForItem, extrasToDump, campOriginFromDisk, roleForItem, plannedDumpSlots, ROLES, DUMP_LABELS } from './storage.js'
+import { punchTree } from './wood.js'
+import { craftByName, craftPlanks } from './craft.js'
+import { placeAt } from './place.js'
+import { findGroundY } from './build.js'
 import { withChestLock } from './cluster.js'
 
 // Official chest.js: bot.openContainer, containerItems(), deposit, withdraw
@@ -53,7 +57,7 @@ export function catalogWindow(win) {
   return {}
 }
 
-function persistChest(pos, items) {
+function persistChest(pos, items, role) {
   if (!pos) return loadStorage()
   const s = loadStorage()
   s.chests = s.chests || []
@@ -62,10 +66,15 @@ function persistChest(pos, items) {
   const z = Math.floor(pos.z)
   let row = s.chests.find((c) => c.x === x && c.y === y && c.z === z)
   if (!row) {
-    row = { x, y, z }
+    row = { x, y, z, role: role || null, items: {}, lastSeen: null }
     s.chests.push(row)
   }
-  row.items = items || {}
+  if (role) row.role = role
+  if (!row.role) {
+    const hit = plannedDumpSlots(s.camp).find((sl) => sl.x === x && sl.z === z)
+    row.role = (hit && hit.role) || row.role || 'misc'
+  }
+  row.items = items || row.items || {}
   row.lastSeen = new Date().toISOString()
   return saveStorage(s)
 }
@@ -96,7 +105,7 @@ export async function depositNamed(bot, state, name, count) {
   }
   const n = Math.max(1, Number(count) || Number(item.count) || 1)
   const origin = (state && state.campOrigin) || campOriginFromDisk()
-  const block = findChestBlock(bot, origin, 16)
+  const block = findChestForItem(bot, name, origin, 24) || findChestBlock(bot, origin, 16)
   if (!block) return false
   return withChestLock(async () => {
     const win = await openChest(bot, block)
@@ -119,7 +128,7 @@ export async function depositNamed(bot, state, name, count) {
 export async function withdrawNamed(bot, state, name, count) {
   const n = Math.max(1, Number(count) || 1)
   const origin = (state && state.campOrigin) || campOriginFromDisk()
-  const block = findChestBlock(bot, origin, 16)
+  const block = findChestForItem(bot, name, origin, 24) || findChestBlock(bot, origin, 16)
   if (!block) {
     plog('chest withdraw no chest')
     return false
@@ -147,23 +156,16 @@ export async function withdrawNamed(bot, state, name, count) {
   })
 }
 
-export async function depositExtras(bot, state) {
-  const extras = extrasToDump(bot)
-  if (!extras.length) return false
-  const origin = (state && state.campOrigin) || campOriginFromDisk()
-  const block = findChestBlock(bot, origin, 16)
-  if (!block) {
-    plog('chest no chest, keep extras n=' + extras.length)
-    return false
-  }
+async function depositInto(bot, block, extras, role) {
+  if (!block || !extras.length) return 0
   if (Math.hypot(block.position.x, block.position.z) < SPAWN_SAFE_R) {
     plog('chest skip spawn')
-    return false
+    return 0
   }
-  recordChest(block.position)
+  recordChest(block.position, { role })
   return withChestLock(async () => {
     const win = await openChest(bot, block)
-    if (!win) return false
+    if (!win) return 0
     let dumped = 0
     for (const ex of extras) {
       try {
@@ -175,16 +177,122 @@ export async function depositExtras(bot, state) {
         plog('chest deposit fail ' + ex.name + ' ' + (err && err.message))
       }
     }
-    persistChest(block.position, catalogWindow(win))
+    persistChest(block.position, catalogWindow(win), role)
     try { win.close() } catch {}
-    plog('chest dumped=' + dumped)
-    return dumped > 0
+    plog('chest dumped=' + dumped + ' role=' + (role || 'any'))
+    return dumped
   })
+}
+
+export async function depositExtras(bot, state) {
+  const extras = extrasToDump(bot)
+  if (!extras.length) return false
+  const origin = (state && state.campOrigin) || campOriginFromDisk()
+  const groups = {}
+  for (const ex of extras) {
+    const role = roleForItem(ex.name)
+    ;(groups[role] = groups[role] || []).push(ex)
+  }
+  let dumped = 0
+  for (const role of Object.keys(groups)) {
+    const block = findChestForRole(bot, role, origin, 24) || findChestBlock(bot, origin, 16)
+    if (!block) {
+      plog('chest no ' + role + ' chest, keep extras n=' + groups[role].length)
+      continue
+    }
+    dumped += (await depositInto(bot, block, groups[role], role)) || 0
+  }
+  return dumped > 0
+}
+
+async function ensureChestItem(bot, state) {
+  if (countNamed(bot, ['chest']) >= 1) return true
+  for (let i = 0; i < 8 && countLogs(bot) < 4 && countPlanks(bot) < 16 && !state.dead; i++) {
+    state.note = 'dump gather wood for chest'
+    try { await punchTree(bot, state) } catch (err) { plog('dump wood fail ' + (err && err.message)) }
+    if (countLogs(bot) >= 2 || countPlanks(bot) >= 8) break
+  }
+  if (countPlanks(bot) < 8 && countLogs(bot) >= 1) {
+    try { await craftPlanks(bot, state) } catch {}
+  }
+  if (countNamed(bot, ['chest']) < 1 && (countPlanks(bot) >= 8 || countLogs(bot) >= 2)) {
+    try { await craftByName(bot, state, 'chest', 1) } catch {}
+  }
+  return countNamed(bot, ['chest']) >= 1
+}
+
+async function maybeSign(bot, state, x, y, z, label) {
+  if (countNamed(bot, ['oak_sign', 'spruce_sign', 'birch_sign', 'sign']) < 1) return false
+  const item = findItemByNames(bot, ['oak_sign', 'spruce_sign', 'birch_sign', 'sign'])
+  if (!item) return false
+  try { if (typeof bot.equip === 'function') await bot.equip(item, 'hand') } catch {}
+  const sx = x
+  const sy = y
+  const sz = z - 1
+  if (Math.hypot(sx, sz) < SPAWN_SAFE_R) return false
+  const res = await placeAt(bot, sx, sy, sz)
+  if (res !== true && res !== 'exists') return false
+  try {
+    const block = bot.blockAt(new Vec3(sx, sy, sz))
+    if (block && typeof bot.updateSign === 'function') {
+      await bot.updateSign(block, String(label || '').slice(0, 15))
+      plog('chest sign ' + label + ' at ' + sx + ' ' + sy + ' ' + sz)
+      return true
+    }
+  } catch (err) {
+    plog('chest sign skip ' + (err && err.message))
+  }
+  return false
+}
+
+export async function ensureDumpChests(bot, state) {
+  state.phase = 'dump'
+  const origin = (state && state.campOrigin) || campOriginFromDisk()
+  const yGuess = origin.y != null ? origin.y : (bot.entity && bot.entity.position && bot.entity.position.y) || 64
+  const slots = plannedDumpSlots({ x: origin.x, y: origin.y, z: origin.z })
+  let placed = 0
+  for (const slot of slots) {
+    if (state.dead) break
+    const y = slot.y != null ? slot.y : findGroundY(bot, slot.x, slot.z, yGuess)
+    if (y == null) continue
+    if (Math.hypot(slot.x, slot.z) < SPAWN_SAFE_R) continue
+    let existing = null
+    try { existing = bot.blockAt(new Vec3(slot.x, y, slot.z)) } catch {}
+    const n = existing && existing.name
+    if (n && (bareName(n) === 'chest' || bareName(n) === 'trapped_chest' || bareName(n) === 'barrel')) {
+      persistChest({ x: slot.x, y, z: slot.z }, {}, slot.role)
+      placed++
+      continue
+    }
+    if (!(await ensureChestItem(bot, state))) {
+      plog('dump need wood for chest role=' + slot.role + ' inv=' + inventorySummary(bot))
+      state.note = 'dump need wood for ' + slot.role
+      break
+    }
+    const item = findItemByNames(bot, ['chest'])
+    if (!item) break
+    try { if (typeof bot.equip === 'function') await bot.equip(item, 'hand') } catch {}
+    try { await gotoNear(bot, slot.x, y, slot.z, 3, 8000) } catch {}
+    const res = await placeAt(bot, slot.x, y, slot.z)
+    if (res === true || res === 'exists') {
+      persistChest({ x: slot.x, y, z: slot.z }, {}, slot.role)
+      try { await maybeSign(bot, state, slot.x, y, slot.z, slot.label || DUMP_LABELS[slot.role] || slot.role) } catch {}
+      plog('dump chest role=' + slot.role + ' at ' + slot.x + ' ' + y + ' ' + slot.z + ' res=' + res)
+      state.note = 'dump ' + slot.role + ' at ' + slot.x + ',' + y + ',' + slot.z
+      placed++
+    } else {
+      plog('dump place fail role=' + slot.role + ' at ' + slot.x + ' ' + y + ' ' + slot.z)
+    }
+  }
+  state.note = 'dump placed=' + placed + '/' + slots.length
+  plog(state.note)
+  return placed > 0
 }
 
 export async function runChest(bot, state) {
   const act = String(state.chestAction || 'catalog').toLowerCase()
   state.phase = 'chest'
+  if (act === 'dump' || act === 'place-dump') return ensureDumpChests(bot, state)
   if (act === 'store' || act === 'deposit') return depositExtras(bot, state)
   if (act === 'withdraw') return withdrawNamed(bot, state, state.chestItem || 'dirt', state.chestCount || 1)
   const items = await catalogNearby(bot, state)

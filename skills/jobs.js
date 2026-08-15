@@ -7,7 +7,7 @@ import { loadStorage, extrasToDump } from './storage.js'
 import { myName } from './cluster.js'
 import { leaveSpawnForGather } from './collect.js'
 import { runGather, missingTargets } from './gather.js'
-import { depositExtras, catalogNearby } from './chest.js'
+import { depositExtras, catalogNearby, ensureDumpChests } from './chest.js'
 import { runCamp } from './camp.js'
 import { runFarm } from './farm.js'
 import { gotoNear } from './lib.js'
@@ -25,6 +25,7 @@ const FORAGE = [
   { id: 'gather-wood', type: 'gather', item: 'logs', priority: 88 },
   { id: 'gather-cobble', type: 'gather', item: 'cobblestone', priority: 86 },
   { id: 'deposit', type: 'deposit', priority: 80 },
+  { id: 'place-dump', type: 'dump', priority: 93 },
   { id: 'place-camp', type: 'build', schematic: 'camp', priority: 70 },
   { id: 'tend-farm', type: 'farm', priority: 60 },
   { id: 'guard-camp', type: 'guard', priority: 50 }
@@ -152,6 +153,12 @@ export function seedForageIfEmpty(bot, state) {
   if (missing.cobblestone) upsertForage(board, 'gather-cobble', { status: 'open', claimedBy: null, item: 'cobblestone', count: missing.cobblestone })
 
   if (extras.length && hasChest) upsertForage(board, 'deposit', { status: 'open', claimedBy: null })
+  const roles = new Set((loadStorage().chests || []).map((c) => c && c.role).filter(Boolean))
+  if (roles.size < 4) upsertForage(board, 'place-dump', { status: 'open', claimedBy: null })
+  else {
+    const dump = board.jobs.find((j) => j.id === 'place-dump')
+    if (dump && dump.status !== 'done' && dump.status !== 'claimed') { dump.status = 'done'; dump.updated = nowIso() }
+  }
   if (!campBuilt) upsertForage(board, 'place-camp', { status: 'open', claimedBy: null, schematic: 'camp' })
   else {
     const row = board.jobs.find((j) => j.id === 'place-camp')
@@ -224,6 +231,9 @@ export async function runClaimedJob(bot, state, job) {
       const dumped = await depositExtras(bot, state)
       try { await catalogNearby(bot, state) } catch {}
       return !!dumped
+    }
+    if (job.id === 'place-dump' || job.type === 'dump') {
+      return ensureDumpChests(bot, state)
     }
     if (job.id === 'place-camp' || (job.type === 'build' && job.schematic === 'camp')) {
       return runCamp(bot, state)

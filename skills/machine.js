@@ -55,7 +55,7 @@ function wantGather(state) {
 }
 
 function wantChest(state) {
-  return state.chatMode === 'chest' || state.chatMode === 'store' || state.chatMode === 'withdraw'
+  return state.chatMode === 'chest' || state.chatMode === 'store' || state.chatMode === 'withdraw' || state.chatMode === 'dump'
 }
 
 function wantSleep(state) {

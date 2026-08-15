@@ -39,6 +39,7 @@ export function parseLocalCmd(text) {
   if (core === 'gather') return { cmd: 'gather' }
   const gatherM = core.match(/^gather\s+([a-z0-9_]+)(?:\s+(\d+))?$/)
   if (gatherM) return { cmd: 'gather', item: gatherM[1], count: gatherM[2] ? Number(gatherM[2]) : 8 }
+  if (core === 'dump' || core === 'chests' || core === 'place dump') return { cmd: 'dump' }
   if (core === 'chest' || core === 'list') return { cmd: 'chest' }
   if (core === 'store' || core === 'deposit') return { cmd: 'store' }
   const withM = core.match(/^withdraw\s+([a-z0-9_]+)(?:\s+(\d+))?$/)
