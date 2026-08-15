@@ -226,6 +226,15 @@ async function ensureChestItem(bot, state) {
   if (countNamed(bot, ['chest']) < 1 && (countPlanks(bot) >= 8 || countLogs(bot) >= 2)) {
     try { await craftByName(bot, state, 'chest', 1) } catch {}
   }
+  if (countNamed(bot, ['chest']) < 1) {
+    // 2 logs = 8 planks = 1 chest, but a missing table spends 4 planks. Get one more log.
+    plog('dump chest craft miss, extra wood inv=' + inventorySummary(bot))
+    try { await punchTree(bot, state) } catch (err) { plog('dump extra wood fail ' + (err && err.message)) }
+    if (countPlanks(bot) < 8 && countLogs(bot) >= 1) {
+      try { await craftPlanks(bot, state) } catch {}
+    }
+    try { await craftByName(bot, state, 'chest', 1) } catch {}
+  }
   return countNamed(bot, ['chest']) >= 1
 }
 

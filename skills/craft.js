@@ -1,6 +1,9 @@
+import { createRequire } from 'module'
 import { plog, sleep, bareName, countNamed, countSand, countLogs, countPlanks, inventorySummary, findItemByNames, isLogName, isPlankName, resolveItemName, eachInventoryItem, gotoNear, horizFromOrigin, SPAWN_SAFE_R } from './lib.js'
 import { leaveSpawnForGather } from './collect.js'
 import { placeNamed } from './place.js'
+
+const require = createRequire(import.meta.url)
 
 const ALIASES = {
   sandstone: 'sandstone',
@@ -39,7 +42,15 @@ export function itemId(bot, name) {
   return null
 }
 
-export function findCraftingTable(bot, maxDistance = 16) {
+function shapelessRecipe(bot, ingredientId, resultId, resultCount) {
+  const Recipe = require('prismarine-recipe')(bot.registry).Recipe
+  return new Recipe({
+    ingredients: [ingredientId],
+    result: { id: resultId, count: resultCount || 1 }
+  })
+}
+
+export function findCraftingTable(bot, maxDistance = 64) {
   const here = bot.entity && bot.entity.position
   if (!here) return null
   try {
@@ -131,10 +142,34 @@ export async function craftByName(bot, state, name, count = 1) {
     }
   }
 
+  if (want === 'chest') {
+    if (countPlanks(bot) < 8 && countLogs(bot) >= 1) {
+      try { await craftPlanks(bot, state) } catch {}
+    }
+    let table = findCraftingTable(bot, 64)
+    if (!table) {
+      const extra = countPlanks(bot) >= 12 || countLogs(bot) >= 1
+      if (!extra) {
+        plog('craft chest need table + extra wood inv=' + inventorySummary(bot))
+        return false
+      }
+      if (countPlanks(bot) < 4 && countLogs(bot) >= 1) {
+        try { await craftPlanks(bot, state) } catch {}
+      }
+      table = await ensureTableBlock(bot, state)
+    }
+    if (!table) {
+      plog('craft chest no table inv=' + inventorySummary(bot))
+      return false
+    }
+    try { await gotoNear(bot, table.position.x, table.position.y, table.position.z, 2, 8000) } catch {}
+    return craftRaw(bot, state, 'chest', n, table)
+  }
+
   let table = null
   let recs = recipesForName(bot, want, null)
   if (!recs.length) {
-    table = findCraftingTable(bot, 16)
+    table = findCraftingTable(bot, 64)
     if (!table) table = await ensureTableBlock(bot, state)
     if (table) {
       try { await gotoNear(bot, table.position.x, table.position.y, table.position.z, 2, 8000) } catch {}
@@ -156,6 +191,15 @@ async function craftRaw(bot, state, name, count, table) {
   }
   let recs = []
   try { recs = bot.recipesFor(id, null, 1, table || null) || [] } catch {}
+  // 1.21 minecraft-data only lists oak_log→oak_planks. Stripped logs/wood also craft in vanilla.
+  if (!recs.length && isPlankName(name)) {
+    const log = firstLogName(bot)
+    const logId = log ? itemId(bot, log) : null
+    if (logId != null) {
+      recs = [shapelessRecipe(bot, logId, id, 4)]
+      plog('craft synth ' + name + ' from ' + log)
+    }
+  }
   const rec = recs[0]
   if (!rec) {
     plog('craft recipesFor empty ' + name)

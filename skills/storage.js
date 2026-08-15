@@ -81,13 +81,17 @@ export function plannedDumpSlots(origin) {
   const ox = (origin && origin.x != null) ? origin.x : CAMP_XZ.x
   const oz = (origin && origin.z != null) ? origin.z : CAMP_XZ.z
   const oy = (origin && origin.y != null) ? origin.y : null
-  return DUMP_PLAN.map((s) => ({
-    role: s.role,
-    label: s.label,
-    x: ox + s.dx,
-    y: oy,
-    z: oz + s.dz
-  }))
+  return DUMP_PLAN.map((s) => {
+    let x = ox + s.dx
+    let z = oz + s.dz
+    const r = Math.hypot(x, z)
+    if (r < SPAWN_SAFE_R) {
+      const scale = (SPAWN_SAFE_R + 2) / (r || 1)
+      x = Math.round(x * scale)
+      z = Math.round(z * scale)
+    }
+    return { role: s.role, label: s.label, x, y: oy, z }
+  })
 }
 
 function sameBlock(a, x, y, z) {
