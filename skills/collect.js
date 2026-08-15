@@ -253,7 +253,13 @@ export async function leaveRoof(bot, state) {
   } catch {}
   if (stair && stair.position) {
     plog('leave roof via ' + stair.name + ' at ' + stair.position.x + ' ' + stair.position.y + ' ' + stair.position.z)
-    try { await gotoNear(bot, stair.position.x, stair.position.y, stair.position.z, 1, 6000) } catch {}
+    try { await gotoNear(bot, stair.position.x, stair.position.y, stair.position.z, 1, 4000) } catch {}
+    try {
+      await bot.lookAt(stair.position.offset(0.5, 0.2, 0.5), true)
+      bot.setControlState('forward', true)
+      await sleep(2500)
+    } catch {}
+    try { bot.setControlState('forward', false) } catch {}
     return true
   }
   const dirs = [[1, 0], [2, 0], [1, 1], [1, -1], [2, 1], [2, -1], [0, 1], [0, -1], [3, 0], [-1, 0], [0, 2], [0, -2]]
@@ -293,7 +299,6 @@ export async function leaveRoof(bot, state) {
 export async function leaveSpawnForGather(bot, state) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
-  try { await leaveRoof(bot, state) } catch {}
   const r0 = horizFromOrigin(bot)
   if (r0 >= SPAWN_SAFE_R && (p.y < 110)) return true
   const tx = 32
@@ -301,9 +306,8 @@ export async function leaveSpawnForGather(bot, state) {
   plog('collect leave-spawn r=' + r0.toFixed(1) + ' y=' + p.y.toFixed(1) + ' -> camp 32,0')
   state.phase = 'leave-spawn'
   state.note = 'leaving spawn toward camp 32,0'
-  stopPath(bot)
-  if (p.y >= 108) {
-    try { await leaveRoof(bot, state) } catch {}
+  if (p.y >= 108 || isPerch(bot)) {
+    try { await leaveRoof(bot, state) } catch (err) { plog('leave roof fail ' + (err && err.message)) }
   } else if (bot.pathfinder && goals && goals.GoalXZ) {
     try {
       const g = new goals.GoalXZ(tx, tz)
