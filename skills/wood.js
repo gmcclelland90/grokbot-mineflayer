@@ -1,6 +1,7 @@
-import { plog, sleep, posOf, bareName, countLogs, countPlanks, countNamed, inventorySummary, horizFromOrigin, isLogName, looksLikeTree, isPlayerBuilt, stopPath, sayAllowed, SPAWN_SAFE_R, SAND_SCAN_R } from './lib.js'
+import { plog, sleep, posOf, bareName, countLogs, countPlanks, countNamed, inventorySummary, horizFromOrigin, isLogName, looksLikeTree, isPlayerBuilt, stopPath, sayAllowed, SPAWN_SAFE_R, SAND_SCAN_R, LOG_SCAN_R } from './lib.js'
 import { collectViaPlugin, leaveSpawnForGather, exploreNewDir } from './collect.js'
 import { craftPlanks, craftTableItem } from './craft.js'
+import { pinCampNearGrove, campOriginFromDisk } from './storage.js'
 
 function isTreeLog(bot, b) {
   if (!b || !b.name) return false
@@ -11,12 +12,21 @@ function isTreeLog(bot, b) {
   return looksLikeTree(bot, b)
 }
 
-export function findLog(bot, maxDistance = SAND_SCAN_R) {
+function maybeRepinCamp(bot, block) {
+  if (!block || !block.position) return
+  pinCampNearGrove(block.position)
+}
+
+export function findLog(bot, maxDistance = LOG_SCAN_R) {
   const here = bot.entity && bot.entity.position
   if (!here) return null
+  const dist = Math.max(64, maxDistance || LOG_SCAN_R)
   try {
-    const block = bot.findBlock({ matching: (b) => isTreeLog(bot, b), maxDistance, point: here })
-    if (block) return block
+    const block = bot.findBlock({ matching: (b) => isTreeLog(bot, b), maxDistance: dist, point: here })
+    if (block) {
+      maybeRepinCamp(bot, block)
+      return block
+    }
   } catch (err) {
     plog('findBlock log fail ' + (err && err.message))
   }
@@ -29,9 +39,9 @@ export async function punchTree(bot, state) {
     await leaveSpawnForGather(bot, state)
     if (horizFromOrigin(bot) < SPAWN_SAFE_R) return false
   }
-  const block = findLog(bot, SAND_SCAN_R)
+  const block = findLog(bot, LOG_SCAN_R)
   if (!block) {
-    plog('wood no tree in ' + SAND_SCAN_R + ' pos=' + (posOf(bot) && posOf(bot).str))
+    plog('wood no tree in ' + LOG_SCAN_R + ' pos=' + (posOf(bot) && posOf(bot).str) + ' keep walking')
     await exploreNewDir(bot, state)
     return false
   }

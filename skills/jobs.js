@@ -22,7 +22,7 @@ const LOCK_MS = 8000
 const FORAGE = [
   { id: 'leave-spawn', type: 'gather', priority: 100 },
   { id: 'gather-stock', type: 'gather', priority: 90 },
-  { id: 'gather-wood', type: 'gather', item: 'logs', priority: 88 },
+  { id: 'gather-wood', type: 'gather', item: 'logs', priority: 96 },
   { id: 'gather-cobble', type: 'gather', item: 'cobblestone', priority: 86 },
   { id: 'deposit', type: 'deposit', priority: 80 },
   { id: 'place-dump', type: 'dump', priority: 93 },
@@ -103,6 +103,19 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function expireStaleClaims(board) {
+  const now = Date.now()
+  for (const j of board.jobs || []) {
+    if (j.status !== 'claimed') continue
+    const age = now - Date.parse(j.updated || 0)
+    if (!Number.isFinite(age) || age > 40000) {
+      j.status = 'open'
+      j.claimedBy = null
+      j.updated = nowIso()
+    }
+  }
+}
+
 function upsertForage(board, id, extra) {
   const proto = FORAGE.find((x) => x.id === id)
   if (!proto) return
@@ -177,11 +190,32 @@ export function seedForageIfEmpty(bot, state) {
 export async function claimNextJob(bot, state) {
   return withLock(() => {
     const board = seedForageIfEmpty(bot, state)
+    expireStaleClaims(board)
+    const me = myName()
+    const mine = board.jobs.find((j) => j.status === 'claimed' && String(j.claimedBy || '').toLowerCase() === me.toLowerCase())
+    if (mine) {
+      mine.updated = nowIso()
+      saveJobs(board)
+      return mine
+    }
     const open = board.jobs.filter((j) => jobOpen(j)).sort((a, b) => (b.priority || 0) - (a.priority || 0))
-    const job = open[0]
-    if (!job) return null
+    let job = open[0]
+    if (countLogs(bot) < 1) {
+      const wood = open.find((j) => j.id === 'gather-wood' || j.item === 'logs')
+      if (wood) job = wood
+    }
+    if (!job) {
+      const logs = countLogs(bot)
+      const dirt = countNamed(bot, ['dirt', 'grass_block'])
+      const chests = ((loadStorage().chests) || []).length
+      if (logs < 8) job = { id: 'work-wood-' + me, type: 'gather', item: 'logs', count: 8, priority: 88, personal: true }
+      else if (dirt < 8) job = { id: 'work-dirt-' + me, type: 'gather', item: 'dirt', count: 8, priority: 86, personal: true }
+      else if (chests < 1) job = { id: 'work-dump-' + me, type: 'dump', priority: 84, personal: true }
+      else job = { id: 'work-farm-' + me, type: 'farm', priority: 60, personal: true }
+      board.jobs.push(job)
+    }
     job.status = 'claimed'
-    job.claimedBy = myName()
+    job.claimedBy = me
     job.updated = nowIso()
     saveJobs(board)
     plog('jobs claim ' + job.id + ' type=' + job.type + ' by=' + job.claimedBy)
@@ -198,7 +232,7 @@ export async function finishJob(job, ok) {
     if (ok) {
       row.status = 'done'
       // forage loops: re-open tend/guard so the colony keeps working
-      if (row.id === 'tend-farm' || row.id === 'guard-camp' || row.id === 'gather-stock') {
+      if (row.id === 'tend-farm' || row.id === 'guard-camp' || row.id === 'gather-stock' || row.id === 'gather-wood' || row.id === 'place-dump') {
         row.status = 'open'
         row.claimedBy = null
       }

@@ -124,6 +124,24 @@ function inventorySummary(bot) {
 
 function countSand(bot) { return countNamed(bot, SAND_ITEMS) }
 function countStone(bot) { return countNamed(bot, STONE_ITEMS) }
+function countLogsStatus(bot) {
+  let n = 0
+  try {
+    eachInventoryItem(bot, (it) => {
+      const name = resolveItemName(bot, it)
+      if (!name || name.includes('planks') || name.includes('stripped')) return
+      if (name.endsWith('_log') || name === 'log' || name.endsWith('_stem')) n += Number(it.count) || 0
+    })
+  } catch {}
+  return n
+}
+function countChestsDisk() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(__dirname, 'rl', 'storage.json'), 'utf8'))
+    return (j && Array.isArray(j.chests)) ? j.chests.length : 0
+  } catch { return 0 }
+}
+
 
 function findItem(bot, names) {
   try {
@@ -158,6 +176,8 @@ function writeStatus(bot, extra) {
     `sand=${countSand(bot)}`,
     `sandstone=${countStone(bot)}`,
     `dirt=${countNamed(bot, ['dirt', 'grass_block'])}`,
+    `logs=${countLogsStatus(bot)}`,
+    `chests=${countChestsDisk()}`,
     `food_inv=${countFood(bot)}`,
     `left_hole=${extra.leftHole ? 'yes' : 'no'}`,
     `house=${extra.housePlaced ? 'yes' : 'no'}`,
@@ -2245,7 +2265,7 @@ export function startPlayLoop(bot) {
 
   const chat = (msg) => {
     const s = String(msg || '')
-    const allowed = s === 'house up' || s === 'coming' || s === 'hungry' || s === 'got food' || s === 'hey' || s === 'looking for sand' || s === 'ok' || s === 'staying' || s === 'on it' || s === 'eating' || s === "I'm good"
+    const allowed = s === 'house up' || s === 'coming' || s === 'hungry' || s === 'got food' || s === 'hey' || s === 'looking for sand' || s === 'staying' || s === 'eating' || s === "I'm good"
     if (allowed || (s.length > 0 && s.length <= 40 && state.chatAllowSay)) {
       try { bot.chat(s) } catch {}
       plog('chat said ' + s)
@@ -2338,7 +2358,7 @@ export function startPlayLoop(bot) {
       state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd collect ' + state.collectName + ' from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'collect', note: 'chat collect ' + state.collectName }))
       return
@@ -2354,7 +2374,7 @@ export function startPlayLoop(bot) {
       state.chatExtra = extra || null
       state.collectName = null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd wood from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'wood', note: 'chat wood' }))
       return
@@ -2365,7 +2385,7 @@ export function startPlayLoop(bot) {
       state.chatExtra = extra || null
       state.placeName = (cmd && cmd.item) || block || null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd place from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'place', note: 'chat place' }))
       return
@@ -2377,7 +2397,7 @@ export function startPlayLoop(bot) {
       state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd gather ' + (state.gatherName || 'stock') + ' from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'gather', note: 'chat gather ' + (state.gatherName || 'stock') }))
       return
@@ -2388,7 +2408,7 @@ export function startPlayLoop(bot) {
       state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd dump from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'dump', note: 'chat dump chests at camp' }))
       return
@@ -2401,7 +2421,7 @@ export function startPlayLoop(bot) {
       state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd ' + name + ' from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: name, note: 'chat ' + name }))
       return
@@ -2415,7 +2435,7 @@ export function startPlayLoop(bot) {
       state.craftItem = null
       state.placeName = null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd camp from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'camp', note: 'chat camp at 32,surface,0' }))
       return
@@ -2428,7 +2448,7 @@ export function startPlayLoop(bot) {
       state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd farm ' + kind + ' from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: 'farm', note: 'chat farm ' + kind }))
       return
@@ -2452,7 +2472,7 @@ export function startPlayLoop(bot) {
       state.craftItem = null
       state.placeName = null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd build ' + state.buildName + ' from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: state.chatMode, note: 'chat build ' + state.buildName }))
       return
@@ -2464,7 +2484,7 @@ export function startPlayLoop(bot) {
       state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
-      chat('on it')
+      plog('cmd ack muted')
       plog('chat cmd ' + name + ' ' + item + ' from ' + (parsedUser || '?'))
       writeStatus(bot, Object.assign({}, state, { phase: name, note: 'chat ' + name + ' ' + item }))
       return
@@ -2557,14 +2577,17 @@ export function startPlayLoop(bot) {
   try { wireChatter(bot, state) } catch (err) { plog('chatter wire fail ' + (err && err.message)) }
   plog('commands-live come follow stop collect wood craft place table shovel pick hungry build hut camp farm gather chest store withdraw dump sleep guard')
 
-  function applyCommandFile(file, label) {
+  function applyCommandFile(file, label, opts) {
     if (!fs.existsSync(file)) return
     const raw = fs.readFileSync(file, 'utf8').trim()
-    try { fs.unlinkSync(file) } catch { try { fs.writeFileSync(file, '') } catch {} }
-    if (!raw) return
-    const obj = JSON.parse(raw)
+    if (!raw) { try { fs.unlinkSync(file) } catch {}; return }
+    let obj
+    try { obj = JSON.parse(raw) } catch { try { fs.unlinkSync(file) } catch {}; return }
     const dest = obj.to || obj.for || obj.username
-    if (dest && String(dest).toLowerCase() !== String(bot.username || '').toLowerCase()) return
+    const me = String(bot.username || '').toLowerCase()
+    if (dest && String(dest).toLowerCase() !== me) return
+    if (!dest && opts && opts.requireDest) return
+    try { fs.unlinkSync(file) } catch { try { fs.writeFileSync(file, '') } catch {} }
     const action = String(obj.action || '').toLowerCase()
     plog(label + ' action=' + action)
     if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry' || action === 'craft' || action === 'wood' || action === 'place' || action === 'table' || action === 'shovel' || action === 'pick' || action === 'build' || action === 'hut' || action === 'camp' || action === 'farm' || action === 'gather' || action === 'chest' || action === 'store' || action === 'withdraw' || action === 'dump' || action === 'commands' || action === 'help' || action === 'sleep' || action === 'guard') {
@@ -2573,10 +2596,11 @@ export function startPlayLoop(bot) {
     }
   }
   const myCommandFile = path.join(__dirname, 'rl', 'command-' + String(bot.username || 'Steve') + '.json')
+  const isPrimary = String(bot.username || 'Steve') === 'Steve'
   const cmdPoll = setInterval(() => {
     try {
       applyCommandFile(myCommandFile, 'command-' + String(bot.username || 'Steve') + '.json')
-      applyCommandFile(COMMAND_FILE, 'command.json')
+      applyCommandFile(COMMAND_FILE, 'command.json', { requireDest: !isPrimary })
     } catch (err) {
       plog('command.json fail ' + (err && err.message))
     }

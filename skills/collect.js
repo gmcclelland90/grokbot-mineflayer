@@ -1,4 +1,6 @@
 import { Vec3, goals, pathfinderPkg, plog, sleep, posOf, bareName, countSand, countNamed, inventorySummary, horizFromOrigin, isPlayerBuilt, isSandBlock, isLogName, looksLikeTree, stopPath, sayAllowed, isSolid, gotoNear, SPAWN_SAFE_R, SAND_SCAN_R } from './lib.js'
+import { liveCampXZ } from './storage.js'
+import { unstickIfNeeded } from './stuck.js'
 
 function applyCollectMovements(bot) {
   try {
@@ -317,8 +319,9 @@ function applyLeaveMovements(bot) {
 async function walkTowardCamp(bot, ms = 2500) {
   const here = bot.entity && bot.entity.position
   if (!here) return
+  const pin = liveCampXZ()
   try {
-    const yaw = Math.atan2(-(32 - here.x), (0 - here.z))
+    const yaw = Math.atan2(-(pin.x - here.x), (pin.z - here.z))
     await bot.look(yaw, 0, true)
     bot.setControlState('forward', true)
     bot.setControlState('sprint', false)
@@ -331,44 +334,77 @@ async function walkTowardCamp(bot, ms = 2500) {
   } catch {}
 }
 
+async function walkRadialOut(bot, state, ms = 2200) {
+  const here = bot.entity && bot.entity.position
+  if (!here) return
+  const r = Math.hypot(here.x, here.z) || 1
+  const idx = (state.leaveHeading || 0) % 8
+  let tx, tz
+  if (r >= 4) {
+    tx = (here.x / r) * 32
+    tz = (here.z / r) * 32
+  } else {
+    const ang = (idx / 8) * Math.PI * 2
+    tx = Math.cos(ang) * 32
+    tz = Math.sin(ang) * 32
+  }
+  plog('leave-spawn walk r=' + r.toFixed(1) + ' -> ' + tx.toFixed(1) + ' ' + tz.toFixed(1) + ' heading=' + idx)
+  try {
+    await bot.lookAt(new Vec3(tx, here.y + 1, tz), true)
+    bot.setControlState('forward', true)
+    bot.setControlState('sprint', true)
+    bot.setControlState('jump', true)
+    await sleep(350)
+    bot.setControlState('jump', false)
+    await sleep(ms)
+  } catch {}
+  try {
+    bot.setControlState('forward', false)
+    bot.setControlState('sprint', false)
+    bot.setControlState('jump', false)
+  } catch {}
+}
+
 export async function leaveSpawnForGather(bot, state) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
   const r0 = horizFromOrigin(bot)
-  // Grass hills can be y>=102. Done once outside spawn and not on a real perch.
   if (r0 >= SPAWN_SAFE_R && !isPerch(bot)) return true
-  const tx = 32
-  const tz = 0
-  plog('collect leave-spawn r=' + r0.toFixed(1) + ' y=' + p.y.toFixed(1) + ' -> camp 32,0')
   state.phase = 'leave-spawn'
-  state.note = 'leaving spawn toward camp 32,0'
+  state.note = 'leaving spawn r=' + r0.toFixed(1)
+  plog('collect leave-spawn r=' + r0.toFixed(1) + ' y=' + p.y.toFixed(1) + ' radial-out (no sit)')
   applyLeaveMovements(bot)
+  try { await unstickIfNeeded(bot, state, 'leave-spawn') } catch {}
   if (isPerch(bot)) {
     try { await leaveRoof(bot, state) } catch (err) { plog('leave roof fail ' + (err && err.message)) }
   }
-  // Step via near-goals so village / 3-high grass hills do not no-op GoalXZ.
-  if (!isPerch(bot) && bot.pathfinder && goals) {
-    const spots = [[24, 0], [28, 0], [32, 0], [24, 8], [20, -8]]
-    for (const [wx, wz] of spots) {
-      if (horizFromOrigin(bot) >= SPAWN_SAFE_R && !isPerch(bot)) break
-      const cur = bot.entity && bot.entity.position
-      if (!cur) break
+  const before = { x: p.x, z: p.z }
+  await walkRadialOut(bot, state, 2000)
+  if (horizFromOrigin(bot) < SPAWN_SAFE_R && bot.pathfinder && goals) {
+    const cur = bot.entity && bot.entity.position
+    if (cur) {
+      const rr = Math.hypot(cur.x, cur.z) || 1
+      const wx = (cur.x / rr) * 30
+      const wz = (cur.z / rr) * 30
       try {
-        const g = goals.GoalNear ? new goals.GoalNear(wx, Math.floor(cur.y), wz, 2) : new goals.GoalXZ(wx, wz)
+        const g = goals.GoalXZ ? new goals.GoalXZ(Math.floor(wx), Math.floor(wz)) : new goals.GoalNear(wx, cur.y, wz, 3)
         const pth = bot.pathfinder.goto(g)
-        const t = sleep(5000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
+        const t = sleep(4000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
         await Promise.race([pth, t])
       } catch {
         try { bot.pathfinder.setGoal(null) } catch {}
       }
     }
   }
-  if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
-    await walkTowardCamp(bot, 2500)
-  }
   const here = bot.entity && bot.entity.position
+  const moved = here && Math.hypot(here.x - before.x, here.z - before.z) >= 0.6
+  if (!moved) {
+    state.leaveHeading = (state.leaveHeading || 0) + 1
+    plog('leave-spawn no move, new heading=' + (state.leaveHeading % 8))
+    await walkRadialOut(bot, state, 1800)
+  }
   const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R && here && !isPerch(bot)
-  if (!ok) await sleep(400)
+  if (!ok) await sleep(200)
   return ok
 }
 

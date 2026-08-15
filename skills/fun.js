@@ -8,6 +8,9 @@ import { runFarm } from './farm.js'
 import { runGather, missingTargets } from './gather.js'
 import { claimNextJob, runClaimedJob, finishJob } from './jobs.js'
 import { lookAtNearest } from './look.js'
+import { unstickIfNeeded, noteIdleEpisode } from './stuck.js'
+import { ensureDumpChests } from './chest.js'
+import { loadStorage } from './storage.js'
 import { goToSleep, wakeUp, shouldSleep, isNightOrThunder } from './sleep.js'
 
 const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'camp', 'farm', 'sleep', 'guard', 'gather', 'chest', 'store', 'withdraw', 'dump'])
@@ -283,20 +286,21 @@ async function social(bot, state) {
 export async function funTick(bot, state) {
   if (preempted(state)) return false
   lookAtNearest(bot)
+  try { await unstickIfNeeded(bot, state, state.phase || 'fun') } catch {}
   if (bot.isSleeping && !isNightOrThunder(bot)) {
     try { await wakeUp(bot, state) } catch {}
   }
   if (bot.armorManager && typeof bot.armorManager.equipAll === 'function') {
     try { await bot.armorManager.equipAll() } catch {}
   }
+  if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
+    mark(bot, state, 'leave-spawn', 'leave spawn then work')
+    await leaveSpawnForGather(bot, state)
+    return true
+  }
   try {
     const job = await claimNextJob(bot, state)
     if (job) {
-      if (!state.campBuilt && countBuildMaterials(bot) >= 8 && job.id !== 'place-camp' && job.type !== 'build' && job.type !== 'dump') {
-        try { await finishJob(job, false) } catch {}
-        mark(bot, state, 'camp', 'prefer camp over ' + job.id)
-        return campOnce(bot, state)
-      }
       mark(bot, state, job.type || 'job', 'job ' + job.id)
       const ok = await runClaimedJob(bot, state, job)
       await finishJob(job, ok)
@@ -305,22 +309,34 @@ export async function funTick(bot, state) {
   } catch (err) {
     plog('fun job fail ' + (err && err.message))
   }
-  const goal = pickGoal(bot, state)
-  remember(state, goal)
-  mark(bot, state, goal === 'collect' ? 'collect' : goal, 'pick ' + goal)
-  try {
-    if (goal === 'wander') await wander(bot, state)
-    else if (goal === 'collect' || goal === 'gather' || goal === 'job') await runGather(bot, state)
-    else if (goal === 'wood') await woodOnce(bot, state)
-    else if (goal === 'doodle') await doodle(bot, state)
-    else if (goal === 'hut') await hutOnce(bot, state)
-    else if (goal === 'camp') await campOnce(bot, state)
-    else if (goal === 'farm') await farmOnce(bot, state)
-    else if (goal === 'social') await social(bot, state)
-    else if (goal === 'sleep') await goToSleep(bot, state)
-  } catch (err) {
-    plog('fun ' + goal + ' fail ' + (err && err.message))
+  // No board job: wood, dirt, dump, farm, guard. Doodle last.
+  const logs = countLogs(bot)
+  const dirt = countNamed(bot, ['dirt', 'grass_block'])
+  const chests = ((loadStorage().chests) || []).length
+  if (logs < 8) {
+    mark(bot, state, 'wood', 'force wood logs=' + logs)
+    await woodOnce(bot, state)
+    return true
   }
+  if (dirt < 8) {
+    mark(bot, state, 'gather', 'force dirt=' + dirt)
+    await runGather(bot, state)
+    return true
+  }
+  if (chests < 1) {
+    mark(bot, state, 'dump', 'force dump chest')
+    try { await ensureDumpChests(bot, state) } catch (err) { plog('fun dump fail ' + (err && err.message)) }
+    return true
+  }
+  if (!state.farmReady) {
+    mark(bot, state, 'farm', 'force farm')
+    await farmOnce(bot, state)
+    return true
+  }
+  noteIdleEpisode(bot, state, 'fallback doodle after wood/dirt/dump/farm')
+  remember(state, 'doodle')
+  mark(bot, state, 'doodle', 'doodle last')
+  try { await doodle(bot, state) } catch (err) { plog('fun doodle fail ' + (err && err.message)) }
   return true
 }
 

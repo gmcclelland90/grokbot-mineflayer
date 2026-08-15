@@ -1,6 +1,7 @@
 import { plog, sleep, posOf, countSand, countNamed, inventorySummary, horizFromOrigin, stopPath, clearMove } from './lib.js'
 import { funTick } from './fun.js'
 import { lookAtNearest } from './look.js'
+import { unstickIfNeeded, noteIdleEpisode } from './stuck.js'
 
 export async function idleTick(bot, state) {
   if (state.chatMode === 'stay') {
@@ -22,11 +23,15 @@ export async function idleTick(bot, state) {
     return
   }
   if (state.chatMode) {
+    try { await unstickIfNeeded(bot, state, state.chatMode) } catch {}
     await sleep(300)
     return
   }
   lookAtNearest(bot)
-  return funTick(bot, state)
+  try { await unstickIfNeeded(bot, state, 'idle') } catch {}
+  const did = await funTick(bot, state)
+  if (!did) noteIdleEpisode(bot, state, 'funTick returned empty')
+  return did
 }
 
 export async function run(bot, state) {

@@ -4,7 +4,7 @@ import { punchTree } from './wood.js'
 import { placeAt } from './place.js'
 import { buildNamedAt, countBuildMaterials, findGroundY, schemSolidCount } from './build.js'
 import { craftByName, craftSticks, craftPlanks } from './craft.js'
-import { CAMP_XZ, markCamp, recordChest } from './storage.js'
+import { CAMP_XZ, markCamp, recordChest, campOriginFromDisk, liveCampXZ } from './storage.js'
 import { catalogNearby, ensureDumpChests } from './chest.js'
 
 export function campSolidCount() {
@@ -12,12 +12,13 @@ export function campSolidCount() {
 }
 
 export function campXZ() {
-  return { x: CAMP_XZ.x, z: CAMP_XZ.z }
+  return liveCampXZ()
 }
 
 export function resolveCampOrigin(bot, guessY) {
-  const x = CAMP_XZ.x
-  const z = CAMP_XZ.z
+  const pin = liveCampXZ()
+  const x = pin.x
+  const z = pin.z
   const p = bot.entity && bot.entity.position
   const g = guessY != null ? guessY : (p ? p.y : 80)
   const y = findGroundY(bot, x + 3, z + 3, g)
@@ -69,7 +70,8 @@ async function stepTowardCamp(bot) {
     if (sy == null) continue
     const drop = fy - sy
     if (drop > 4 || sy > fy + 1) continue
-    const toward = -Math.hypot(nx - CAMP_XZ.x, nz - CAMP_XZ.z)
+    const pin = liveCampXZ()
+    const toward = -Math.hypot(nx - pin.x, nz - pin.z)
     const score = toward + drop * 0.4
     if (score > bestScore) { bestScore = score; best = { x: nx, y: sy, z: nz, drop } }
   }
@@ -84,14 +86,16 @@ async function walkToCampSite(bot, state) {
   for (let attempt = 0; attempt < 6; attempt++) {
     const p = bot.entity && bot.entity.position
     if (!p) return false
-    const d0 = Math.hypot(p.x - CAMP_XZ.x, p.z - CAMP_XZ.z)
+    const pin = liveCampXZ()
+    const d0 = Math.hypot(p.x - pin.x, p.z - pin.z)
     if (d0 <= 5) return true
-    state.note = 'walk to camp 32,0 d=' + d0.toFixed(1)
+    state.note = 'walk to camp ' + pin.x + ',' + pin.z + ' d=' + d0.toFixed(1)
     plog('camp walk attempt=' + attempt + ' d=' + d0.toFixed(1) + ' pos=' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ' ' + p.z.toFixed(1))
     applyCampWalkMovements(bot)
     try {
       if (bot.pathfinder && goals && goals.GoalXZ) {
-        const g = new goals.GoalXZ(CAMP_XZ.x, CAMP_XZ.z)
+        const pin2 = liveCampXZ()
+        const g = new goals.GoalXZ(pin2.x, pin2.z)
         const pth = bot.pathfinder.goto(g)
         const t = sleep(7000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
         await Promise.race([pth, t])
@@ -101,13 +105,14 @@ async function walkToCampSite(bot, state) {
     }
     const mid = bot.entity && bot.entity.position
     const moved = mid && Math.hypot(mid.x - p.x, mid.z - p.z) >= 0.8
-    const d1 = mid ? Math.hypot(mid.x - CAMP_XZ.x, mid.z - CAMP_XZ.z) : 99
+    const d1 = mid ? Math.hypot(mid.x - liveCampXZ().x, mid.z - liveCampXZ().z) : 99
     if (d1 <= 5) return true
     if (!moved) {
       const stepped = await stepTowardCamp(bot)
       if (!stepped) {
         try {
-          const yaw = Math.atan2(-(CAMP_XZ.x - mid.x), (CAMP_XZ.z - mid.z))
+          const pin3 = liveCampXZ()
+          const yaw = Math.atan2(-(pin3.x - mid.x), (pin3.z - mid.z))
           await bot.look(yaw, 0, true)
           bot.setControlState('forward', true)
           bot.setControlState('jump', false)
@@ -118,7 +123,7 @@ async function walkToCampSite(bot, state) {
     }
   }
   const now = bot.entity && bot.entity.position
-  const d = now ? Math.hypot(now.x - CAMP_XZ.x, now.z - CAMP_XZ.z) : 99
+  const d = now ? Math.hypot(now.x - liveCampXZ().x, now.z - liveCampXZ().z) : 99
   plog('camp at site d=' + d.toFixed(1) + ' pos=' + (now ? now.x.toFixed(1) + ' ' + now.y.toFixed(1) + ' ' + now.z.toFixed(1) : '?'))
   return d <= 8
 }
@@ -273,7 +278,7 @@ export async function runCamp(bot, state) {
       state.guardPos = origin
       state.note = 'camp stub placed=' + n + ' at ' + origin.x + ',' + origin.y + ',' + origin.z
       try { await ensureDumpChests(bot, state) } catch (err) { plog('camp dump skip ' + (err && err.message)) }
-      sayAllowed(bot, state, 'camp up')
+      plog('camp up muted')
       plog('camp stub done placed=' + n + ' inv=' + inventorySummary(bot))
       return true
     }
@@ -319,7 +324,7 @@ export async function runCamp(bot, state) {
       plog('camp dump skip ' + (err && err.message))
     }
     state.note = state.note && String(state.note).includes('chest') ? state.note : ('camp up at ' + origin.x + ' ' + origin.y + ' ' + origin.z)
-    sayAllowed(bot, state, 'camp up')
+    plog('camp up (muted)')
   }
   plog('camp done ok=' + !!ok + ' inv=' + inventorySummary(bot))
   return !!ok

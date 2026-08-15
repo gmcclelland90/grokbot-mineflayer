@@ -136,11 +136,51 @@ export function saveStorage(data) {
   return out
 }
 
+export function liveCampXZ() {
+  const c = campOriginFromDisk()
+  if (c && c.x != null && c.z != null) return { x: c.x, z: c.z }
+  return { x: CAMP_XZ.x, z: CAMP_XZ.z }
+}
+
 export function markCamp(origin) {
   const s = loadStorage()
+  if (origin && origin.x != null && origin.z != null) {
+    const r = Math.hypot(origin.x, origin.z)
+    if (r >= SPAWN_SAFE_R) {
+      s.camp = {
+        x: Math.floor(origin.x),
+        y: origin.y != null ? origin.y : (s.camp && s.camp.y),
+        z: Math.floor(origin.z),
+        r: Math.round(r)
+      }
+      plog('storage camp pin ' + s.camp.x + ' ' + s.camp.y + ' ' + s.camp.z + ' r=' + s.camp.r)
+      return saveStorage(s)
+    }
+  }
   const y = origin && origin.y != null ? origin.y : (s.camp && s.camp.y)
-  // Camp origin is fixed: 32, surface, 0. Never drift to a stub foothold.
+  if (s.camp && s.camp.x != null && Math.hypot(s.camp.x, s.camp.z) >= SPAWN_SAFE_R) {
+    if (y != null) s.camp.y = y
+    return saveStorage(s)
+  }
   s.camp = { x: CAMP_XZ.x, y, z: CAMP_XZ.z, r: 32 }
+  return saveStorage(s)
+}
+
+export function pinCampNearGrove(pos) {
+  if (!pos) return loadStorage()
+  const r = Math.hypot(pos.x, pos.z)
+  if (r < SPAWN_SAFE_R) return loadStorage()
+  const s = loadStorage()
+  if (s.camp && s.camp.grove) return s
+  let x = Math.floor(pos.x) - 2
+  let z = Math.floor(pos.z)
+  if (Math.hypot(x, z) < SPAWN_SAFE_R) {
+    const rr = r || 1
+    x = Math.floor((pos.x / rr) * 26)
+    z = Math.floor((pos.z / rr) * 26)
+  }
+  s.camp = { x, y: Math.floor(pos.y), z, r: Math.round(Math.hypot(x, z)), grove: true }
+  plog('camp repin grove ' + x + ' ' + s.camp.y + ' ' + z)
   return saveStorage(s)
 }
 

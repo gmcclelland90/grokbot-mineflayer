@@ -11,6 +11,7 @@ export { goals, pathfinderPkg }
 export const SPAWN_SAFE_R = 24
 export const SPAWN_LEAVE_R = 28
 export const SAND_SCAN_R = 48
+export const LOG_SCAN_R = 64
 export const SAND_ITEMS = new Set(['sand', 'red_sand'])
 export const PLAYER_NAMES = ['har0x', 'glenn']
 
@@ -212,8 +213,30 @@ export function stopPath(bot) {
   try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
 }
 
+const WORKER_MUTE = new Set(['on it', 'camp up', 'looking for sand'])
+
+export function isHar0xNear(bot) {
+  try {
+    for (const [n, pl] of Object.entries(bot.players || {})) {
+      if (PLAYER_NAMES.includes(String(n).toLowerCase()) && pl && pl.entity) return true
+    }
+  } catch {}
+  return false
+}
+
 export function sayAllowed(bot, state, text) {
   const s = String(text || '')
+  const low = s.toLowerCase()
+  if (WORKER_MUTE.has(low)) {
+    plog('chat-muted ' + s)
+    return
+  }
+  const me = String((bot && bot.username) || process.env.MC_USERNAME || 'Steve').toLowerCase()
+  const toHarox = isHar0xNear(bot) || (state && PLAYER_NAMES.includes(String(state.chatUser || '').toLowerCase()))
+  if (me !== 'steve' && !toHarox) {
+    plog('chat-muted worker ' + s)
+    return
+  }
   try {
     state.chatAllowSay = true
     bot.chat(s)

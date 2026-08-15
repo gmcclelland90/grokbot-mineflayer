@@ -49,3 +49,21 @@ Never pvp/attack usernames in `cluster.json` names (Steve, Steve2, …). Same `!
 5. place camp
 6. tend farm
 7. guard camp
+
+## Per-bot commands
+
+Workers poll `rl/command-<username>.json` (e.g. `command-Steve2.json`). Shared `rl/command.json` is only consumed by Steve, or by a worker if `to`/`for`/`username` matches. Do not use shared command.json for hive-wide jobs — write `rl/jobs.json` or a per-bot file. Workers stay mute (no "on it" / "camp up").
+
+## Hive loop
+
+The six Steves must be constantly working. Standing still is a bug.
+
+- **Observe** STATUS + `rl/episodes.jsonl` (idle / same-pos cause).
+- **Patch** the cause (pathfinder, hole, no trees, job race, leave-spawn sit). Do not only restart.
+- **Repeat** on the next keep-alive. Restart only dead or spawn-stuck extras after a code change.
+
+Workers claim wood / dirt / dump / farm / guard from `rl/jobs.json`. Stale claims expire in 40s. If the board is empty a worker synthesizes a personal forage job. Doodle is last.
+
+Stuck detector: same block ~20s → repath, new heading, step down. Leave-spawn walks radially out (`r>=24`) and must not sit on the 32,0 path.
+
+Force wood at scan 64+. First grove pins `rl/storage.json` `camp.grove`. Then craft+place a dump chest.

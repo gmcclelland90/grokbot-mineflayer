@@ -29,3 +29,15 @@ Observe STATUS.txt -> attempt the current skill in matrix.json -> write one epis
 - p12-wood: log + plank + crafting table in inv or placed
 - p13-shovel: wooden shovel or pick in inv
 - p14-play: p9+p4+p11+p13 done and still alive / self-sufficient
+
+## Hive loop (keep-alive)
+
+Standing still is a bug. If they are not working, learn from it, fix it, improve, repeat. That is the hive loop, not a one-shot unstick.
+
+1. Each worker episode: if idle or same-pos for ~20s, log why to `rl/episodes.jsonl` (`pathfinder`, `hole`, `no-trees`, `job-race`, `leave-spawn`).
+2. Next keep-alive pass reads those causes and **patches the code** that produced them. You are that pass.
+3. Do not restart forever without a code change. Restart only dead or spawn-stuck extras after the patch lands.
+4. Constant work: no job → claim from `rl/jobs.json` (wood, dirt, dump, farm, guard). Doodle last. Never sit on leave-spawn.
+5. Stuck detector (`skills/stuck.js`): same block ~20s → repath / different heading / step down.
+6. Mute worker slogans (`on it`, `camp up`). Talk like a person only to Har0x.
+7. Force wood: walk `r>=24` then keep going until logs (scan 64+). Repin camp near the first grove. Craft+place at least one dump chest and catalog `storage.json`.
