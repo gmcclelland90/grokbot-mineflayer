@@ -171,12 +171,8 @@ export function seedForageIfEmpty(bot, state) {
   if (roles.size < 4 && canCraftChest(bot)) upsertForage(board, 'place-dump', { status: 'open', claimedBy: null })
   else {
     const dump = board.jobs.find((j) => j.id === 'place-dump')
+    // Do not flip hive place-dump back to wait just because THIS worker has no logs.
     if (!dump) upsertForage(board, 'place-dump', { status: 'wait', claimedBy: null })
-    else if (dump.status !== 'claimed') {
-      dump.status = (roles.size < 4 && canCraftChest(bot)) ? 'open' : 'wait'
-      dump.claimedBy = null
-      dump.updated = nowIso()
-    }
   }
   if (!campBuilt) upsertForage(board, 'place-camp', { status: 'open', claimedBy: null, schematic: 'camp' })
   else {
