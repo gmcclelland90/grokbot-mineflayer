@@ -111,7 +111,7 @@ export function inventorySummary(bot) {
 export function isLogName(name) {
   const n = bareName(name)
   if (!n || n.includes('planks')) return false
-  return n.endsWith('_log') || n === 'log' || n.endsWith('_stem')
+  return n.endsWith('_log') || n === 'log' || n.endsWith('_stem') || n.endsWith('_wood') || n.endsWith('_hyphae')
 }
 
 export function isPlankName(name) {

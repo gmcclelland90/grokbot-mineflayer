@@ -143,23 +143,22 @@ export async function craftByName(bot, state, name, count = 1) {
   }
 
   if (want === 'chest') {
-    if (countPlanks(bot) < 8 && countLogs(bot) >= 1) {
-      try { await craftPlanks(bot, state) } catch {}
-    }
     let table = findCraftingTable(bot, 64)
     if (!table) {
-      const extra = countPlanks(bot) >= 12 || countLogs(bot) >= 1
-      if (!extra) {
-        plog('craft chest need table + extra wood inv=' + inventorySummary(bot))
-        return false
-      }
-      if (countPlanks(bot) < 4 && countLogs(bot) >= 1) {
-        try { await craftPlanks(bot, state) } catch {}
+      // Keep a log in reserve: 2 stripped logs = table (4 planks) + 4 planks left, then one more log for the chest.
+      if (countNamed(bot, ['crafting_table']) < 1 && countPlanks(bot) < 4 && countLogs(bot) >= 1) {
+        const log = firstLogName(bot)
+        const plank = plankNameForLog(log)
+        try { await craftRaw(bot, state, plank, 1, null) } catch {}
       }
       table = await ensureTableBlock(bot, state)
     }
-    if (!table) {
-      plog('craft chest no table inv=' + inventorySummary(bot))
+    if (countPlanks(bot) < 8 && countLogs(bot) >= 1) {
+      try { await craftPlanks(bot, state) } catch {}
+    }
+    if (!table) table = findCraftingTable(bot, 64)
+    if (!table || countPlanks(bot) < 8) {
+      plog('craft chest need table + 8 planks inv=' + inventorySummary(bot))
       return false
     }
     try { await gotoNear(bot, table.position.x, table.position.y, table.position.z, 2, 8000) } catch {}
