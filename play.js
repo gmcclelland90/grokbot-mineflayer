@@ -165,6 +165,8 @@ function writeStatus(bot, extra) {
     `build_material=${extra.buildMaterial || 'none'}`,
     `phase=${extra.phase || ''}`,
     `sm=${extra.smState || extra.sm || ''}`,
+    `camp=${extra.campOrigin ? (extra.campOrigin.x + ',' + extra.campOrigin.y + ',' + extra.campOrigin.z) : '32,surface,0'}`,
+    `farm=${extra.farmReady ? 'yes' : 'no'}`,
     `note=${extra.note || ''}`
   ]
   try { fs.writeFileSync(STATUS, lines.join('\n') + '\n') } catch {}
@@ -2274,7 +2276,7 @@ export function startPlayLoop(bot) {
       return
     }
     if (name === 'commands' || name === 'help') {
-      const line = 'come follow stop collect wood craft place table shovel pick hungry build hut sleep guard'
+      const line = 'come follow stop collect wood craft place table shovel pick hungry build hut camp farm sleep guard'
       try { bot.chat(line) } catch {}
       plog('commands-live ' + line)
       return
@@ -2368,9 +2370,46 @@ export function startPlayLoop(bot) {
       writeStatus(bot, Object.assign({}, state, { phase: 'place', note: 'chat place' }))
       return
     }
-    if (name === 'build' || name === 'hut') {
+    if (name === 'camp') {
       state.chatMode = 'build'
-      state.buildName = (cmd && cmd.name) || (extra && extra.name) || 'hut'
+      state.buildName = 'camp'
+      state.chatUser = parsedUser || ''
+      state.chatExtra = extra || null
+      state.collectName = null
+      state.craftItem = null
+      state.placeName = null
+      stopPath(bot)
+      chat('on it')
+      plog('chat cmd camp from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { phase: 'camp', note: 'chat camp at 32,surface,0' }))
+      return
+    }
+    if (name === 'farm') {
+      const kind = String((cmd && cmd.kind) || (extra && extra.kind) || (extra && extra.name) || 'tend').toLowerCase()
+      state.chatMode = 'farm'
+      state.farmKind = kind
+      if (kind === 'wheat' || kind === 'trees') state.buildName = kind
+      state.chatUser = parsedUser || ''
+      state.chatExtra = extra || null
+      stopPath(bot)
+      chat('on it')
+      plog('chat cmd farm ' + kind + ' from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { phase: 'farm', note: 'chat farm ' + kind }))
+      return
+    }
+    if (name === 'build' || name === 'hut') {
+      const bname = (cmd && cmd.name) || (extra && extra.name) || 'hut'
+      if (bname === 'camp') {
+        state.chatMode = 'build'
+        state.buildName = 'camp'
+      } else if (bname === 'wheat' || bname === 'trees') {
+        state.chatMode = 'farm'
+        state.farmKind = bname
+        state.buildName = bname
+      } else {
+        state.chatMode = 'build'
+        state.buildName = bname
+      }
       state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       state.collectName = null
@@ -2379,7 +2418,7 @@ export function startPlayLoop(bot) {
       stopPath(bot)
       chat('on it')
       plog('chat cmd build ' + state.buildName + ' from ' + (parsedUser || '?'))
-      writeStatus(bot, Object.assign({}, state, { phase: 'build', note: 'chat build ' + state.buildName }))
+      writeStatus(bot, Object.assign({}, state, { phase: state.chatMode, note: 'chat build ' + state.buildName }))
       return
     }
     if (name === 'craft' || name === 'table' || name === 'shovel' || name === 'pick') {
@@ -2409,10 +2448,20 @@ export function startPlayLoop(bot) {
       state.guardOn = on
       if (!on) {
         try { if (bot.pvp && typeof bot.pvp.stop === 'function') bot.pvp.stop() } catch {}
+        if (state.chatMode === 'guard') state.chatMode = null
+      } else {
+        const origin = state.campOrigin || state.guardPos
+        if (origin) {
+          state.guardPos = origin
+          state.chatMode = 'guard'
+        } else if (state.campBuilt) {
+          state.guardPos = { x: 32, y: origin && origin.y, z: 0 }
+          state.chatMode = 'guard'
+        }
       }
       chat('ok')
       plog('chat cmd guard ' + (on ? 'on' : 'off') + ' from ' + (parsedUser || '?'))
-      writeStatus(bot, Object.assign({}, state, { note: 'guard ' + (on ? 'on' : 'off') }))
+      writeStatus(bot, Object.assign({}, state, { note: 'guard ' + (on ? 'on' : 'off') + (state.guardPos ? ' at camp' : '') }))
       return
     }
     if (name === 'say') {
@@ -2470,7 +2519,7 @@ export function startPlayLoop(bot) {
   })
   plog('chat listener on (chat/whisper/messagestr) log=' + CHAT_LOG)
   try { wireChatter(bot, state) } catch (err) { plog('chatter wire fail ' + (err && err.message)) }
-  plog('commands-live come follow stop collect wood craft place table shovel pick hungry build hut sleep guard')
+  plog('commands-live come follow stop collect wood craft place table shovel pick hungry build hut camp farm sleep guard')
 
   const cmdPoll = setInterval(() => {
     try {
@@ -2481,9 +2530,9 @@ export function startPlayLoop(bot) {
       const obj = JSON.parse(raw)
       const action = String(obj.action || '').toLowerCase()
       plog('command.json action=' + action)
-      if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry' || action === 'craft' || action === 'wood' || action === 'place' || action === 'table' || action === 'shovel' || action === 'pick' || action === 'build' || action === 'hut' || action === 'commands' || action === 'help' || action === 'sleep' || action === 'guard') {
+      if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry' || action === 'craft' || action === 'wood' || action === 'place' || action === 'table' || action === 'shovel' || action === 'pick' || action === 'build' || action === 'hut' || action === 'camp' || action === 'farm' || action === 'commands' || action === 'help' || action === 'sleep' || action === 'guard') {
         const mapped = action === 'stop' ? 'stay' : action
-        applyChatCmd({ cmd: mapped, block: obj.block || obj.item, item: obj.item || obj.block, user: obj.user, text: obj.text, name: obj.name || obj.block, on: obj.on }, obj.user || state.chatUser || 'har0x', obj)
+        applyChatCmd({ cmd: mapped, block: obj.block || obj.item, item: obj.item || obj.block, user: obj.user, text: obj.text, name: obj.name || obj.block, kind: obj.kind || obj.name, on: obj.on }, obj.user || state.chatUser || 'har0x', obj)
       }
     } catch (err) {
       plog('command.json fail ' + (err && err.message))
@@ -2585,7 +2634,7 @@ export function startPlayLoop(bot) {
       await sleep(600)
       try {
         startStateMachine(bot, state)
-        plog('commands live !come !follow !stop !stay !collect [block] !hungry !craft [item] !wood !place !table !shovel !pick !build [name] !hut !sleep !guard on/off (bang optional; over here=come)')
+        plog('commands live !come !follow !stop !stay !collect [block] !hungry !craft [item] !wood !place !table !shovel !pick !build [name] !hut !camp !farm [wheat|trees] !sleep !guard on/off (bang optional; over here=come)')
       } catch (err) {
         state.useMachine = false
         plog('state machine start fail ' + (err && err.message))

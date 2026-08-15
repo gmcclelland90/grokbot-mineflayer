@@ -41,6 +41,8 @@ P6 doing (2026-08-15): free play. skills/fun.js picks one short goal at a time (
 
 P7 doing (2026-08-15): official example skills. look.js from looker.js (fun/idle glance). guard.js from guard.js + mineflayer-pvp (self-defense; still flee creepers; never attack players/Har0x). sleep.js from sleeper.js (!sleep, night/thunder bed). chatterbox playerJoined hey, 60s cooldown. bloodhound skipped (did not install cleanly).
 
+P8 doing (2026-08-15): spawn camp + farms. Camp MUST be outside Paper spawn protect (r>=24). Origin (32, surface, 0). schematics/camp.json 7x7 open-top palisade (46 blocks). !camp gathers dirt/cobble/logs then places then guards that origin. Wheat farm schematic at (40, surface, 0) and tree nursery at (32, surface, 8). Official farmer.js harvest/sow. !farm wheat|trees|tend. Storage extras -> nearby chest, rl/storage.json. scripts/fetch-schem.mjs for public .schem URLs. Do not mark p9-hut done until a hut is placed.
+
 ## Next inspiration sources (do not implement all now)
 
 Steal these next, still plugin-first, still official/other-bot first — no homemade clones of things examples already do:

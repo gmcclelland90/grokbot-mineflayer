@@ -196,26 +196,26 @@ export async function leaveSpawnForGather(bot, state) {
   if (r0 >= SPAWN_SAFE_R) return true
   const p = bot.entity && bot.entity.position
   if (!p) return false
-  let tx = p.x
-  let tz = p.z
-  const rr = Math.hypot(tx, tz) || 1
-  tx = (tx / rr) * 30
-  tz = (tz / rr) * 30
-  plog('collect leave-spawn r=' + r0.toFixed(1))
+  // Camp origin (32, 0) is r=32, east of spawn — first build site.
+  const tx = 32
+  const tz = 0
+  plog('collect leave-spawn r=' + r0.toFixed(1) + ' -> camp 32,0')
   state.phase = 'leave-spawn'
-  state.note = 'leaving spawn to gather'
+  state.note = 'leaving spawn toward camp 32,0'
   stopPath(bot)
   if (bot.pathfinder && goals && goals.GoalXZ) {
     try {
-      const g = new goals.GoalXZ(Math.floor(tx), Math.floor(tz))
+      const g = new goals.GoalXZ(tx, tz)
       const pth = bot.pathfinder.goto(g)
-      const t = sleep(8000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
+      const t = sleep(10000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
       await Promise.race([pth, t])
     } catch {
       try { bot.pathfinder.setGoal(null) } catch {}
     }
   }
-  return horizFromOrigin(bot) >= SPAWN_SAFE_R
+  const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R
+  if (!ok) await sleep(2000)
+  return ok
 }
 
 export function findNamedBlock(bot, name, maxDistance = SAND_SCAN_R) {

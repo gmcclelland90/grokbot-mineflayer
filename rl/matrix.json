@@ -1,6 +1,6 @@
 {
-  "current": "p5-sand",
-  "updated": "2026-08-15T03:00:00Z",
+  "current": "p-camp",
+  "updated": "2026-08-15T03:10:00Z",
   "loop": "attempt current skill -> score episode -> mark pass/fail -> stay or advance",
   "skills": [
     {
@@ -153,11 +153,12 @@
         "p9-hut",
         "p4-food",
         "p11-flee",
-        "p13-shovel"
+        "p13-shovel",
+        "p-camp"
       ],
       "attempts": 1,
       "last_score": null,
-      "note": "P6 free play: skills/fun.js rotates wander/collect/wood/doodle/hut/social when idle; !stay still stands still; hut not auto-marked; 2026-08-15 13:00 AEST"
+      "note": "P6/P8 free play: fun.js camp-first then farm; !stay still stands still; hut not auto-marked; 2026-08-15 13:10 AEST"
     },
     {
       "id": "p15-others",
@@ -180,7 +181,30 @@
       ],
       "attempts": 1,
       "last_score": null,
-      "note": "listener live; !come !follow !stop !stay !collect !hungry !craft !wood !place !table !shovel !pick !build !hut; 2026-08-15 12:50 AEST"
+      "note": "listener live; !come !follow !stop !stay !collect !hungry !craft !wood !place !table !shovel !pick !build !hut !camp !farm !sleep !guard; 2026-08-15 13:10 AEST"
+    },
+    {
+      "id": "p-camp",
+      "name": "Defended spawn camp outside r>=24",
+      "status": "doing",
+      "deps": [
+        "p1-leave-spawn",
+        "p3-stack-8"
+      ],
+      "attempts": 1,
+      "last_score": null,
+      "note": "camp.json 7x7 palisade 46 dirt at (32,surface,0); !camp gather then build then guard; not done until walls are placed"
+    },
+    {
+      "id": "p-farm",
+      "name": "Wheat + tree farm next to camp",
+      "status": "doing",
+      "deps": [
+        "p-camp"
+      ],
+      "attempts": 1,
+      "last_score": null,
+      "note": "wheat.json 24-block hydrated pad at (40,surface,0); trees.json 6 dirt spots at (32,surface,8); !farm wheat/trees; official farmer.js tend; not done until a plot is placed"
     }
   ]
 }

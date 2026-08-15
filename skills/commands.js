@@ -32,6 +32,10 @@ export function parseLocalCmd(text) {
   if (core === 'shovel' || core === 'wooden shovel' || core === 'wooden_shovel') return { cmd: 'shovel' }
   if (core === 'pick' || core === 'pickaxe' || core === 'wooden pick' || core === 'wooden pickaxe' || core === 'wooden_pickaxe') return { cmd: 'pick' }
   if (core === 'hut' || core === 'house' || core === 'build hut') return { cmd: 'build', name: 'hut' }
+  if (core === 'camp' || core === 'fort' || core === 'base') return { cmd: 'camp' }
+  if (core === 'farm') return { cmd: 'farm', kind: 'tend' }
+  const farmM = core.match(/^farm\s+([a-z0-9_]+)$/)
+  if (farmM) return { cmd: 'farm', kind: farmM[1] }
   if (core === 'commands' || core === 'help') return { cmd: 'commands' }
   if (core === 'sleep') return { cmd: 'sleep' }
   if (core === 'guard off' || core === 'unguard') return { cmd: 'guard', on: false }

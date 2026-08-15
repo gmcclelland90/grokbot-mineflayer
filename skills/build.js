@@ -57,17 +57,26 @@ export function countBuildMaterials(bot) {
   return countBuildInv(bot)
 }
 
-let _hutSolids = 0
-export function hutSolidCount() {
-  if (_hutSolids) return _hutSolids
+const _solidCache = {}
+export function schemSolidCount(name) {
+  const key = String(name || 'hut').toLowerCase().replace(/[^a-z0-9_]/g, '') || 'hut'
+  if (_solidCache[key]) return _solidCache[key]
   try {
-    const jsonPath = path.join(SCHEM_DIR, 'hut.json')
+    const jsonPath = path.join(SCHEM_DIR, key + '.json')
     if (fs.existsSync(jsonPath)) {
       const j = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
-      _hutSolids = (j.blocks || []).filter((x) => x !== 0).length
+      _solidCache[key] = (j.blocks || []).filter((x) => x !== 0).length
     }
   } catch {}
-  return _hutSolids
+  return _solidCache[key] || 0
+}
+
+export function hutSolidCount() {
+  return schemSolidCount('hut')
+}
+
+export function findGroundY(bot, x, z, guess) {
+  return groundY(bot, x, z, guess)
 }
 
 function pickBuildItem(bot) {
@@ -173,7 +182,46 @@ export async function buildNamed(bot, state, name) {
     plog('build no site r>=24 without player-built')
     return false
   }
-  plog('build ' + want + ' n=' + solids.length + ' via prismarine-schematic')
+  return placeSolids(bot, state, want, solids, origin)
+}
+
+export async function buildNamedAt(bot, state, name, origin) {
+  const want = String(name || state.buildName || 'hut').toLowerCase().replace(/[^a-z0-9_]/g, '') || 'hut'
+  state.phase = 'build'
+  state.note = 'build ' + want
+  state.buildName = want
+  if (!origin) {
+    plog('buildNamedAt missing origin')
+    return false
+  }
+  if (Math.hypot(origin.x, origin.z) < SPAWN_SAFE_R) {
+    plog('buildNamedAt refuse spawn origin')
+    return false
+  }
+  if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
+    await leaveSpawnForGather(bot, state)
+    if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
+      plog('build refuse spawn')
+      return false
+    }
+  }
+  let schem
+  try {
+    schem = await loadSchematic(want)
+  } catch (err) {
+    plog('build load fail ' + (err && err.message))
+    return false
+  }
+  const solids = await listSolids(schem)
+  if (!solids.length) {
+    plog('build empty schematic ' + want)
+    return false
+  }
+  return placeSolids(bot, state, want, solids, origin)
+}
+
+async function placeSolids(bot, state, want, solids, origin) {
+  plog('build ' + want + ' n=' + solids.length + ' at ' + origin.x + ' ' + origin.y + ' ' + origin.z)
   stopPath(bot)
   try { await gotoNear(bot, origin.x + 2, origin.y, origin.z + 2, 3, 8000) } catch {}
   let placed = 0
@@ -181,7 +229,7 @@ export async function buildNamed(bot, state, name) {
   let missing = 0
   for (const cell of solids) {
     if (state.dead) break
-    if (state.chatMode && state.chatMode !== 'build') break
+    if (state.chatMode && state.chatMode !== 'build' && state.chatMode !== 'camp' && state.chatMode !== 'farm') break
     const x = origin.x + cell.pos.x
     const y = origin.y + cell.pos.y
     const z = origin.z + cell.pos.z
@@ -208,7 +256,7 @@ export async function buildNamed(bot, state, name) {
   state.buildMaterial = (left && resolveItemName(bot, left)) || state.buildMaterial || 'none'
   state.note = 'build ' + want + ' placed=' + placed + ' skip=' + skipped + ' missing=' + missing
   plog(state.note + ' inv=' + inventorySummary(bot))
-  if (state.housePlaced) sayAllowed(bot, state, 'house up')
+  if (want === 'hut' && state.housePlaced) sayAllowed(bot, state, 'house up')
   return placed > 0
 }
 

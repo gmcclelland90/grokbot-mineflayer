@@ -21,4 +21,4 @@ Climb in order. Do not skip to house. Stay outside spawn (r>=24) for any gather/
 
 Rules: one step at a time. Restart only when the live brain cannot do the current step. Chat: greet hey (20s), come/follow/stop, short say; else mute except house up.
 
-Live graph: `matrix.json`. Cycle + pass criteria: `LOOP.md`. Current: p5-sand + p12-wood + P6/p14 free play (fun.js). Do not mark p9-hut done until a hut is placed.
+Live graph: `matrix.json`. Cycle + pass criteria: `LOOP.md`. Current: **p-camp** (defended palisade at 32,surface,0) + p-farm (wheat/trees next to camp) + p5-sand + p12-wood + P6/p14 free play. Do not mark p9-hut done until a hut is placed.

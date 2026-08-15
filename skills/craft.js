@@ -18,7 +18,9 @@ const ALIASES = {
   pick: 'wooden_pickaxe',
   pickaxe: 'wooden_pickaxe',
   wooden_pick: 'wooden_pickaxe',
-  wooden_pickaxe: 'wooden_pickaxe'
+  wooden_pickaxe: 'wooden_pickaxe',
+  hoe: 'wooden_hoe',
+  wooden_hoe: 'wooden_hoe'
 }
 
 export function resolveCraftName(name) {
@@ -229,7 +231,7 @@ export async function craftTableItem(bot, state) {
 }
 
 export async function craftWoodenTool(bot, state, kind) {
-  const name = kind === 'shovel' ? 'wooden_shovel' : 'wooden_pickaxe'
+  const name = kind === 'shovel' ? 'wooden_shovel' : kind === 'hoe' ? 'wooden_hoe' : 'wooden_pickaxe'
   if (countNamed(bot, [name]) >= 1) {
     plog('craft have ' + name)
     return true
@@ -237,7 +239,7 @@ export async function craftWoodenTool(bot, state, kind) {
   if (countPlanks(bot) < 3) {
     if (countLogs(bot) >= 1) await craftPlanks(bot, state)
   }
-  const sticksNeed = kind === 'shovel' ? 2 : 2
+  const sticksNeed = 2
   await craftSticks(bot, state, sticksNeed)
   const table = await ensureTableBlock(bot, state)
   if (!table) {
@@ -264,6 +266,7 @@ export async function runCraft(bot, state) {
   }
   if (mode === 'shovel' || item === 'wooden_shovel') return craftWoodenTool(bot, state, 'shovel')
   if (mode === 'pick' || item === 'wooden_pickaxe') return craftWoodenTool(bot, state, 'pick')
+  if (mode === 'hoe' || item === 'wooden_hoe') return craftWoodenTool(bot, state, 'hoe')
   if (item === 'sandstone') return craftSandstone(bot, state)
   if (isPlankName(item) || item === 'oak_planks') return craftPlanks(bot, state)
   if (item === 'stick') return craftSticks(bot, state, 4)

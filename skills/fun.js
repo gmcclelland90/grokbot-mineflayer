@@ -3,10 +3,12 @@ import { huntSand, huntBlock, leaveSpawnForGather } from './collect.js'
 import { punchTree } from './wood.js'
 import { placeAt } from './place.js'
 import { buildNamed, countBuildMaterials, hutSolidCount } from './build.js'
+import { runCamp, campSolidCount } from './camp.js'
+import { runFarm } from './farm.js'
 import { lookAtNearest } from './look.js'
 import { goToSleep, wakeUp, shouldSleep, isNightOrThunder } from './sleep.js'
 
-const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'sleep'])
+const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'camp', 'farm', 'sleep', 'guard'])
 const DOODLE_ITEMS = ['dirt', 'grass_block', 'sand', 'red_sand', 'sandstone', 'cobblestone']
 const SOCIAL_CD_MS = 60000
 const SOCIAL_LINES = ['hi', 'hey', 'found dirt', 'looking around', 'nice spot']
@@ -96,20 +98,25 @@ function pickGoal(bot, state) {
   const logs = countLogs(bot)
   const buildN = countBuildMaterials(bot)
   const need = hutSolidCount()
+  const campNeed = campSolidCount()
+  if (!state.funStarted) {
+    state.funStarted = true
+    if (!state.campBuilt) return 'camp'
+    return 'wander'
+  }
+  if (!state.campBuilt) return 'camp'
+  if (state.campBuilt && !state.farmReady) return 'farm'
   const pool = ['wander']
   if (sand < 8 || dirt < 8) pool.push('collect')
   if (logs < 1) pool.push('wood')
   if (sand + dirt >= 1) pool.push('doodle')
   if (need > 0 && buildN >= need) pool.push('hut')
+  if (state.farmReady || state.treesReady) pool.push('farm')
   const other = nearbyOther(bot, 12)
   if (other && Date.now() - (state.funSaidAt || 0) >= SOCIAL_CD_MS) pool.push('social')
   if (shouldSleep(bot)) pool.push('sleep')
   const fresh = pool.filter((g) => !recent.includes(g))
   const use = fresh.length ? fresh : pool
-  if (!state.funStarted) {
-    state.funStarted = true
-    return use.includes('wander') ? 'wander' : use[0]
-  }
   return use[Math.floor(Math.random() * use.length)]
 }
 
@@ -238,6 +245,19 @@ async function hutOnce(bot, state) {
   return buildNamed(bot, state, 'hut')
 }
 
+async function campOnce(bot, state) {
+  mark(bot, state, 'camp', 'gather then palisade at 32,surface,0')
+  return runCamp(bot, state)
+}
+
+async function farmOnce(bot, state) {
+  if (!state.farmReady) state.farmKind = 'wheat'
+  else if (!state.treesReady && Math.random() < 0.4) state.farmKind = 'trees'
+  else state.farmKind = 'tend'
+  mark(bot, state, 'farm', 'farm ' + state.farmKind)
+  return runFarm(bot, state)
+}
+
 async function social(bot, state) {
   const other = nearbyOther(bot, 12) || findPlayerNamed(bot, null)
   if (!other || !other.position) {
@@ -276,6 +296,8 @@ export async function funTick(bot, state) {
     else if (goal === 'wood') await woodOnce(bot, state)
     else if (goal === 'doodle') await doodle(bot, state)
     else if (goal === 'hut') await hutOnce(bot, state)
+    else if (goal === 'camp') await campOnce(bot, state)
+    else if (goal === 'farm') await farmOnce(bot, state)
     else if (goal === 'social') await social(bot, state)
     else if (goal === 'sleep') await goToSleep(bot, state)
   } catch (err) {

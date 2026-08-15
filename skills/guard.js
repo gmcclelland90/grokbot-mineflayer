@@ -1,4 +1,4 @@
-import { plog, sleep, stopPath, PLAYER_NAMES } from './lib.js'
+import { plog, sleep, stopPath, PLAYER_NAMES, gotoNear } from './lib.js'
 import { HOSTILES, nearestHostile } from './flee.js'
 
 // Official guard.js + mineflayer-pvp: bot.pvp.attack(nearest mob).
@@ -83,6 +83,7 @@ export function recentlyHurt(state) {
 export function shouldGuard(bot, state) {
   if (!guardEnabled(state)) return false
   if (nearestCreeper(bot, RANGE)) return false
+  if (state && state.chatMode === 'guard') return true
   if (nearestGuardTarget(bot, RANGE)) return true
   if (recentlyHurt(state) && nearestGuardTarget(bot, RANGE + 4)) return true
   return false
@@ -105,9 +106,20 @@ export async function fightTarget(bot, entity) {
   }
 }
 
+async function holdGuardPos(bot, state) {
+  const pos = state.guardPos || state.campOrigin
+  if (!pos) return
+  const here = bot.entity && bot.entity.position
+  if (!here) return
+  const d = Math.hypot(here.x - pos.x, here.z - pos.z)
+  if (d <= 4) return
+  state.note = 'guard walk camp'
+  try { await gotoNear(bot, pos.x, pos.y || here.y, pos.z, 3, 8000) } catch {}
+}
+
 export async function runGuard(bot, ctx, still) {
   const state = ctx.state
-  plog('guard self-defense on range=' + RANGE)
+  plog('guard self-defense on range=' + RANGE + (state.guardPos ? ' pos=camp' : ''))
   while (still() && !state.dead) {
     if (!guardEnabled(state)) {
       stopGuard(bot)
@@ -118,14 +130,20 @@ export async function runGuard(bot, ctx, still) {
       return
     }
     const target = nearestGuardTarget(bot, recentlyHurt(state) ? RANGE + 4 : RANGE)
-    if (!target) {
-      stopGuard(bot)
-      return
+    if (target) {
+      state.phase = 'guard'
+      state.note = 'guard ' + String(target.name || 'mob')
+      await fightTarget(bot, target)
+      await sleep(400)
+      continue
     }
-    state.phase = 'guard'
-    state.note = 'guard ' + String(target.name || 'mob')
-    await fightTarget(bot, target)
-    await sleep(400)
+    stopGuard(bot)
+    if (state.chatMode === 'guard') {
+      await holdGuardPos(bot, state)
+      await sleep(400)
+      continue
+    }
+    return
   }
   stopGuard(bot)
 }
