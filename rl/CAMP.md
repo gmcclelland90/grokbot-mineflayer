@@ -8,7 +8,7 @@ Default first pin was **(32, surface, 0)** — that is only `r>=24` due east of 
 
 **Repin rule:** if a worker finds trees at `r>=24`, move camp origin to a flat-ish spot next to that grove (still `r>=24`). Prefer "near wood + outside protect" over the original +X axis. Write `rl/storage.json` `camp` and this file. Wheat/trees schematics stay relative to the new origin (trees south +8, wheat east +8).
 
-- **Camp palisade** `schematics/camp.json` (also `.schem`): current pin in `rl/storage.json` `camp` (started 32,surface,0). 7×7 footprint, 2-high dirt/cobble wall, door hole on the west wall at local (0, *, 3), facing spawn. 46 wall blocks. Open-top (no roof) so we can start with ~46 dirt.
+- **Camp palisade** `schematics/camp.json` (also `.schem`): current pin in `rl/storage.json` `camp` (**3,97,67** r=67, grove north of spawn; started 32,surface,0). 7×7 footprint, 2-high dirt/cobble wall, door hole on the west wall at local (0, *, 3), facing spawn. 46 wall blocks. Open-top (no roof) so we can start with ~46 dirt.
 - **Wheat farm** `schematics/wheat.json`: east of camp (default 40,surface,0). 5×5 dirt pad, center cell left air for water. 24 blocks. Farmer tills + sows after place.
 - **Tree nursery** `schematics/trees.json`: south of camp (default 32,surface,8). 6 dirt spots on a 7×4 pad, 2-block gaps so oak can grow.
 - Stub foothold ~14,108,-23 is a reachable dirt pad when 32,0 is blocked. It is **not** the colony origin.

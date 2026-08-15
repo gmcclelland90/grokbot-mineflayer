@@ -129,7 +129,7 @@ function countLogsStatus(bot) {
   try {
     eachInventoryItem(bot, (it) => {
       const name = resolveItemName(bot, it)
-      if (!name || name.includes('planks') || name.includes('stripped')) return
+      if (!name || name.includes('planks')) return
       if (name.endsWith('_log') || name === 'log' || name.endsWith('_stem')) n += Number(it.count) || 0
     })
   } catch {}

@@ -54,7 +54,7 @@ export function findCraftingTable(bot, maxDistance = 16) {
 }
 
 function plankNameForLog(logName) {
-  const n = bareName(logName)
+  let n = bareName(logName).replace(/^stripped_/, '')
   if (n.endsWith('_log')) return n.replace(/_log$/, '_planks')
   if (n.endsWith('_stem')) return n.replace(/_stem$/, '_planks')
   if (n.endsWith('_wood')) return n.replace(/_wood$/, '_planks')
