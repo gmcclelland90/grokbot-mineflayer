@@ -168,8 +168,8 @@ function connect(cfg) {
     bot.loadPlugin(pluginOf(pvpPkg, 'pvp'))
     bot.loadPlugin(pluginOf(toolPkg, 'tool'))
     bot.loadPlugin(pluginOf(armorManagerPkg, 'armor-manager'))
-    const sm = stateMachine && (stateMachine.BotStateMachine || stateMachine.default)
-    log('info', 'Loaded plugins: pathfinder, collectblock, pvp, tool, armor-manager statemachine=' + !!(sm || (stateMachine && stateMachine.StateTransition)))
+    const sm = stateMachine && (stateMachine.BotStateMachine || stateMachine.StateTransition || (stateMachine.default && stateMachine.default.BotStateMachine))
+    log('info', 'Loaded plugins: pathfinder, collectblock, pvp, tool, armor-manager statemachine=' + !!sm + ' (BotStateMachine starts in play)')
   } catch (err) {
     log('error', 'Plugin load failed: ' + err.message)
     console.error(err)

@@ -28,12 +28,12 @@ Rethink: stop homemade loops. Plugins do the body. A state machine does the hand
 ## Build order
 
 P0 done: collectblock for gather. Chat kept. Matrix kept.
-P1 doing (2026-08-15): installed tool, armor-manager, statemachine. Loaded in index.js.
-    skills/ modules: escape.js, collect.js, follow.js, idle.js (call collectBlock + pathfinder).
-    play.js prefers those skills. Escape first. No auto-follow (come/follow only if chat says so).
-    p5-sand hunts sand via collectBlock.collect outside r>=24.
-P2 next: BotStateMachine states + !commands (collect, follow, come, stop, eat, flee, craft, place).
-P3: food + wood + tools via those skills (climb matrix p4-p13).
+P1 done (2026-08-15): tool, armor-manager, statemachine loaded. skills/ escape collect follow idle.
+    No auto-follow. collectBlock gather r>=24.
+P2 done (2026-08-15): nested BotStateMachine (idle, escape, follow, collect, flee).
+    !come !follow !stop !stay !collect [block] !hungry (bang optional; over here=come).
+    Talk short, no coord spam, no plank grief, spawn r>=24. No auto-follow Har0x.
+P3 next: food + wood + tools via those skills (climb matrix p4-p13).
 P4: schematic/builder for the hut and bigger builds.
 P5: other-bot protocol (chat !commands, share coords, don't grief each other).
 P6: free play. Brain only sets goals. Hands run forever.

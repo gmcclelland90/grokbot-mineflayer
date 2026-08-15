@@ -8,6 +8,8 @@ import { inHole as skillInHole, escapeHole as skillEscapeHole, isOneBlockHole as
 import { huntSand } from './skills/collect.js'
 import { honorFollow } from './skills/follow.js'
 import { idleTick } from './skills/idle.js'
+import { startStateMachine } from './skills/machine.js'
+import { parseLocalCmd as parseMindCmd, cmdName, sayHungry } from './skills/commands.js'
 
 const { goals } = pathfinderPkg
 const Vec3 = Vec3Import.Vec3 || Vec3Import
@@ -161,6 +163,7 @@ function writeStatus(bot, extra) {
     `house_blocks=${extra.houseBlocks || 0}`,
     `build_material=${extra.buildMaterial || 'none'}`,
     `phase=${extra.phase || ''}`,
+    `sm=${extra.smState || extra.sm || ''}`,
     `note=${extra.note || ''}`
   ]
   try { fs.writeFileSync(STATUS, lines.join('\n') + '\n') } catch {}
@@ -2117,14 +2120,7 @@ function findPlayerNamed(bot, name) {
 }
 
 function parseLocalCmd(text) {
-  const t = String(text || '').trim().toLowerCase().replace(/[!?.]+$/g, '').trim()
-  const core = t.replace(/^steve[,:\s]+/, '').replace(/\s+steve$/, '').trim()
-  if (core === 'come' || core === 'here' || core === 'come here' || core === 'come to me') return 'come'
-  if (core === 'follow' || core === 'follow me') return 'follow'
-  if (core === 'stop' || core === 'stay' || core === 'stand still') return 'stay'
-  if (/\bover here\b/.test(t) || /\bthis way\b/.test(t) || /\bcome look\b/.test(t) || /\bcome see\b/.test(t) || /\blook here\b/.test(t)) return 'come'
-  if (/\b(hi|hey|hello)\b/.test(t)) return 'hi'
-  return null
+  return parseMindCmd(text)
 }
 
 function chatBusy(state) {
@@ -2233,12 +2229,15 @@ export function startPlayLoop(bot) {
     chatExtra: null,
     chatComing: false,
     lastHeyAt: 0,
-    saidComing: false
+    saidComing: false,
+    collectName: null,
+    useMachine: false,
+    smState: ''
   }
 
   const chat = (msg) => {
     const s = String(msg || '')
-    const allowed = s === 'house up' || s === 'coming' || s === 'hungry' || s === 'got food' || s === 'hey' || s === 'looking for sand'
+    const allowed = s === 'house up' || s === 'coming' || s === 'hungry' || s === 'got food' || s === 'hey' || s === 'looking for sand' || s === 'ok' || s === 'staying' || s === 'on it' || s === 'eating' || s === "I'm good"
     if (allowed || (s.length > 0 && s.length <= 40 && state.chatAllowSay)) {
       try { bot.chat(s) } catch {}
       plog('chat said ' + s)
@@ -2260,53 +2259,79 @@ export function startPlayLoop(bot) {
   }
 
   function applyChatCmd(cmd, user, extra) {
-    if (cmd === 'hi') {
-      maybeSayHey('greet from ' + user)
+    const name = cmdName(cmd) || (typeof cmd === 'string' ? cmd : '')
+    const parsedUser = (cmd && typeof cmd === 'object' && cmd.user) ? cmd.user : user
+    const block = (cmd && typeof cmd === 'object' && cmd.block) || (extra && extra.block) || (extra && extra.item)
+    extra = extra || (cmd && typeof cmd === 'object' ? cmd : null)
+    if (name === 'hi') {
+      maybeSayHey('greet from ' + parsedUser)
       return
     }
-    if (cmd === 'stay') {
+    if (name === 'stay') {
       state.chatMode = 'stay'
-      state.chatUser = user || ''
+      state.chatUser = parsedUser || ''
       state.chatExtra = null
+      state.collectName = null
       stopPath(bot)
       clearMove(bot)
       try { bot.setControlState('jump', false) } catch {}
-      plog('chat cmd stay from ' + (user || '?'))
-      writeStatus(bot, Object.assign({}, state, { phase: 'chat-stay', note: 'chat stay from ' + (user || '?') }))
+      chat('staying')
+      plog('chat cmd stay from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { phase: 'chat-stay', note: 'chat stay from ' + (parsedUser || '?') }))
       return
     }
-    if (cmd === 'follow') {
+    if (name === 'follow') {
       state.chatMode = 'follow'
-      state.chatUser = user || ''
+      state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
-      plog('chat cmd follow ' + (user || '?') + ' (stay cancelled, hunt may resume loose)')
-      writeStatus(bot, Object.assign({}, state, { phase: 'chat-follow', note: 'chat follow ' + (user || '?') }))
+      chat('ok')
+      plog('chat cmd follow ' + (parsedUser || '?') + ' (no auto-follow)')
+      writeStatus(bot, Object.assign({}, state, { phase: 'chat-follow', note: 'chat follow ' + (parsedUser || '?') }))
+      if (state.useMachine) return
       if (inHole(bot)) {
         plog('follow deferred, escape first')
         return
       }
-      const ent = findPlayerNamed(bot, user)
+      const ent = findPlayerNamed(bot, parsedUser)
       if (ent) startFollow(bot, ent, FOLLOW_RANGE)
       return
     }
-    if (cmd === 'come') {
+    if (name === 'come') {
       state.chatMode = 'come'
-      state.chatUser = user || ''
+      state.chatUser = parsedUser || ''
       state.chatExtra = extra || null
       stopPath(bot)
       state.saidComing = true
       chat('coming')
-      plog('chat cmd come from ' + (user || '?') + ' (stay cancelled)')
-      writeStatus(bot, Object.assign({}, state, { phase: 'chat-come', note: 'chat come from ' + (user || '?') }))
+      plog('chat cmd come from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { phase: 'chat-come', note: 'chat come from ' + (parsedUser || '?') }))
+      if (state.useMachine) return
       if (inHole(bot)) {
         plog('come deferred, escape first')
         return
       }
-      comeNow(bot, state, user, extra)
+      comeNow(bot, state, parsedUser, extra)
       return
     }
-    if (cmd === 'say') {
+    if (name === 'collect') {
+      const want = String(block || 'sand').toLowerCase().replace(/[^a-z0-9_]/g, '')
+      state.chatMode = 'collect'
+      state.collectName = want || 'sand'
+      state.chatUser = parsedUser || ''
+      state.chatExtra = extra || null
+      stopPath(bot)
+      chat('on it')
+      plog('chat cmd collect ' + state.collectName + ' from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { phase: 'collect', note: 'chat collect ' + state.collectName }))
+      return
+    }
+    if (name === 'hungry') {
+      plog('chat cmd hungry from ' + (parsedUser || '?'))
+      sayHungry(bot, state)
+      return
+    }
+    if (name === 'say') {
       const text = extra && extra.text != null ? String(extra.text).trim() : ''
       if (text && text.length <= 40) {
         state.chatAllowSay = true
@@ -2334,7 +2359,8 @@ export function startPlayLoop(bot) {
     plog('chat heard src=' + src + ' ' + user + ': ' + String(text).slice(0, 120))
     const cmd = parseLocalCmd(text)
     if (cmd) {
-      applyChatCmd(cmd, user, null)
+      plog('cmd parse ' + cmdName(cmd) + (cmd.block ? (' ' + cmd.block) : '') + ' from ' + user)
+      applyChatCmd(cmd, (cmd.user || user), cmd)
       return
     }
     appendJsonl(CHAT_PENDING, rec)
@@ -2369,9 +2395,9 @@ export function startPlayLoop(bot) {
       const obj = JSON.parse(raw)
       const action = String(obj.action || '').toLowerCase()
       plog('command.json action=' + action)
-      if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say') {
+      if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry') {
         const mapped = action === 'stop' ? 'stay' : action
-        applyChatCmd(mapped, obj.user || state.chatUser || 'har0x', obj)
+        applyChatCmd({ cmd: mapped, block: obj.block || obj.item, user: obj.user, text: obj.text }, obj.user || state.chatUser || 'har0x', obj)
       }
     } catch (err) {
       plog('command.json fail ' + (err && err.message))
@@ -2453,7 +2479,7 @@ export function startPlayLoop(bot) {
 
   ;(async () => {
     try {
-      plog('loop start pid=' + process.pid + ' mode=p5-sand skills=on collectBlock=' + (bot.collectBlock && typeof bot.collectBlock.collect === 'function' ? 'ready' : 'MISSING'))
+      plog('loop start pid=' + process.pid + ' mode=p2-sm skills=on collectBlock=' + (bot.collectBlock && typeof bot.collectBlock.collect === 'function' ? 'ready' : 'MISSING'))
       try {
         if (bot.collectBlock) {
           bot.collectBlock.chestLocations = []
@@ -2471,12 +2497,39 @@ export function startPlayLoop(bot) {
       } catch {}
       writeStatus(bot, state)
       await sleep(600)
-      if (inHole(bot)) {
+      try {
+        startStateMachine(bot, state)
+        plog('commands live !come !follow !stop !stay !collect [block] !hungry (bang optional; over here=come)')
+      } catch (err) {
+        state.useMachine = false
+        plog('state machine start fail ' + (err && err.message))
+        if (err && err.stack) console.error(err.stack)
+      }
+      if (inHole(bot) && !state.useMachine) {
         plog('spawn in hole, escape first')
         await escapeHole(bot, state)
       }
-      plog('no auto-follow; chat come/follow only. skills=escape,collect,follow,idle')
+      plog('no auto-follow; chat come/follow only. sm=' + (state.useMachine ? 'on' : 'off'))
       while (true) {
+        if (state.useMachine) {
+          if (state.dead || state.waitingSpawn) {
+            state.phase = 'dead'
+            writeStatus(bot, state)
+            await sleep(500)
+            continue
+          }
+          if (state.note === 'respawned, wait then resume house') {
+            state.phase = 'wait-spawn'
+            plog('simple wait after death')
+            await sleep(2500)
+            await clearMove(bot)
+            try { bot.setControlState('jump', false) } catch {}
+            state.note = 'simple after death'
+          }
+          writeStatus(bot, state)
+          await sleep(800)
+          continue
+        }
         if (state.dead || state.waitingSpawn) {
           state.phase = 'dead'
           writeStatus(bot, state)

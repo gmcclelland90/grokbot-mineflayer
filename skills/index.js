@@ -1,4 +1,7 @@
 export { inHole, escapeHole, isOneBlockHole } from './escape.js'
-export { huntSand, findSand } from './collect.js'
+export { huntSand, findSand, huntBlock, leaveSpawnForGather } from './collect.js'
 export { startFollow, comeNow, honorFollow } from './follow.js'
 export { idleTick } from './idle.js'
+export { nearestHostile, fleeHostile } from './flee.js'
+export { parseLocalCmd, cmdName, sayHungry } from './commands.js'
+export { startStateMachine } from './machine.js'

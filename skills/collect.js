@@ -148,8 +148,9 @@ export async function huntSand(bot, state) {
     sayAllowed(bot, state, 'looking for sand')
   }
   if (r < SPAWN_SAFE_R) {
-    plog('sand skip, still in spawn r=' + r.toFixed(1))
-    return false
+    plog('sand leave-spawn first r=' + r.toFixed(1))
+    await leaveSpawnForGather(bot, state)
+    if (horizFromOrigin(bot) < SPAWN_SAFE_R) return false
   }
   const block = findSand(bot, SAND_SCAN_R)
   if (block) {
@@ -171,4 +172,87 @@ export async function huntSand(bot, state) {
 
 export async function run(bot, state) {
   return huntSand(bot, state)
+}
+
+const BLOCK_ALIASES = {
+  sand: ['sand', 'red_sand'],
+  dirt: ['dirt', 'grass_block'],
+  gravel: ['gravel'],
+  sandstone: ['sandstone', 'red_sandstone']
+}
+
+export async function leaveSpawnForGather(bot, state) {
+  const r0 = horizFromOrigin(bot)
+  if (r0 >= SPAWN_SAFE_R) return true
+  const p = bot.entity && bot.entity.position
+  if (!p) return false
+  let tx = p.x
+  let tz = p.z
+  const rr = Math.hypot(tx, tz) || 1
+  tx = (tx / rr) * 30
+  tz = (tz / rr) * 30
+  plog('collect leave-spawn r=' + r0.toFixed(1))
+  state.phase = 'leave-spawn'
+  state.note = 'leaving spawn to gather'
+  stopPath(bot)
+  if (bot.pathfinder && goals && goals.GoalXZ) {
+    try {
+      const g = new goals.GoalXZ(Math.floor(tx), Math.floor(tz))
+      const pth = bot.pathfinder.goto(g)
+      const t = sleep(8000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
+      await Promise.race([pth, t])
+    } catch {
+      try { bot.pathfinder.setGoal(null) } catch {}
+    }
+  }
+  return horizFromOrigin(bot) >= SPAWN_SAFE_R
+}
+
+export function findNamedBlock(bot, name, maxDistance = SAND_SCAN_R) {
+  const want = bareName(name)
+  const names = new Set(BLOCK_ALIASES[want] || [want])
+  const here = bot.entity && bot.entity.position
+  if (!here) return null
+  const match = (b) => {
+    const n = bareName(b && b.name)
+    if (!names.has(n)) return false
+    if (isPlayerBuilt(b) || n.includes('planks')) return false
+    if (b.position && Math.hypot(b.position.x, b.position.z) < SPAWN_SAFE_R) return false
+    return true
+  }
+  try {
+    const block = bot.findBlock({ matching: match, maxDistance, point: here })
+    if (block) return block
+  } catch (err) {
+    plog('findBlock ' + want + ' fail ' + (err && err.message))
+  }
+  return null
+}
+
+export async function huntBlock(bot, state, blockName) {
+  const name = bareName(blockName || state.collectName || 'sand')
+  if (!name || name === 'sand' || name === 'red_sand') return huntSand(bot, state)
+  const r = horizFromOrigin(bot)
+  state.phase = 'collect'
+  state.note = 'hunt ' + name + ' r=' + r.toFixed(1)
+  if (r < SPAWN_SAFE_R) {
+    await leaveSpawnForGather(bot, state)
+    if (horizFromOrigin(bot) < SPAWN_SAFE_R) return false
+  }
+  const block = findNamedBlock(bot, name, SAND_SCAN_R)
+  if (block) {
+    plog('collect target ' + block.name)
+    const before = countNamed(bot, [bareName(block.name)])
+    await collectViaPlugin(bot, block, 'cmd-' + name, 15000)
+    const after = countNamed(bot, [bareName(block.name)])
+    if (after > before) {
+      plog('collect PICKUP ' + name + '=' + after + ' items=' + inventorySummary(bot))
+      state.note = 'PICKUP ' + name + '=' + after
+      return true
+    }
+    return false
+  }
+  plog('no ' + name + ' in ' + SAND_SCAN_R + ' explore')
+  await exploreNewDir(bot, state)
+  return false
 }
