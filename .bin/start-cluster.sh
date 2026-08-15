@@ -47,8 +47,13 @@ while [ "$i" -le "$N" ]; do
     i=$((i + 1))
     continue
   fi
-  LOG="$ROOT/bot-${NAME}.log"
-  STATUS="$ROOT/STATUS-${NAME}.txt"
+  if [ "$NAME" = "$BASE" ]; then
+    LOG="$ROOT/bot.log"
+    STATUS="$ROOT/STATUS.txt"
+  else
+    LOG="$ROOT/bot-${NAME}.log"
+    STATUS="$ROOT/STATUS-${NAME}.txt"
+  fi
   echo "cluster start $NAME log=$LOG"
   STEVE_NAME="$NAME" STEVE_LOG="$LOG" STEVE_STATUS="$STATUS" \
     MC_USERNAME="$NAME" MC_AUTH=offline \

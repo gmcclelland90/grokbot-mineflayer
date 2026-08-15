@@ -42,13 +42,14 @@ Never pvp/attack usernames in `cluster.json` names (Steve, Steve2, …). Same `!
 
 ## Job priority (foraging)
 
-1. leave-spawn (off roofs / r>=24, walk toward camp 32,0)
-2. place-dump (4+1 labeled camp chests: terrain/stone/wood/food/misc) if roles missing
-3. gather missing stock
-4. deposit extras to the matching role chest
-5. place camp
-6. tend farm
-7. guard camp
+1. leave-spawn (off roofs / r>=24). Do not close this for siblings still at spawn.
+2. gather-wood (collectBlock logs, range 64+, r>=24) while logs<8
+3. place-dump waits until logs>=2 (or a chest/planks in hand); never spin place-dump with empty wood
+4. gather missing stock
+5. deposit extras to the matching role chest
+6. place camp
+7. tend farm
+8. guard camp
 
 ## Per-bot commands
 

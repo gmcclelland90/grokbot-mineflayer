@@ -313,8 +313,8 @@ export async function funTick(bot, state) {
   const logs = countLogs(bot)
   const dirt = countNamed(bot, ['dirt', 'grass_block'])
   const chests = ((loadStorage().chests) || []).length
-  if (logs < 8) {
-    mark(bot, state, 'wood', 'force wood logs=' + logs)
+  if (logs < 8 || (chests < 1 && logs < 2)) {
+    mark(bot, state, 'wood', 'force wood logs=' + logs + (chests < 1 ? ' (need chest)' : ''))
     await woodOnce(bot, state)
     return true
   }
@@ -324,7 +324,7 @@ export async function funTick(bot, state) {
     return true
   }
   if (chests < 1) {
-    mark(bot, state, 'dump', 'force dump chest')
+    mark(bot, state, 'dump', 'force dump chest logs=' + logs)
     try { await ensureDumpChests(bot, state) } catch (err) { plog('fun dump fail ' + (err && err.message)) }
     return true
   }

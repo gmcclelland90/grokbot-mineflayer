@@ -1,6 +1,95 @@
 {
   "queen": "chat+keepalive",
-  "workers": ["Steve"],
-  "jobs": [],
-  "updated": "2026-08-15T03:15:00Z"
+  "workers": [
+    "Steve",
+    "Steve2",
+    "Steve3",
+    "Steve4",
+    "Steve5",
+    "Steve6"
+  ],
+  "jobs": [
+    {
+      "id": "leave-spawn",
+      "type": "gather",
+      "status": "done",
+      "claimedBy": null,
+      "priority": 100,
+      "updated": "2026-08-15T04:07:38.115Z"
+    },
+    {
+      "id": "gather-wood",
+      "type": "gather",
+      "status": "claimed",
+      "claimedBy": "Steve2",
+      "priority": 96,
+      "item": "logs",
+      "count": 8,
+      "updated": "2026-08-15T04:08:11.053Z"
+    },
+    {
+      "id": "place-dump",
+      "type": "dump",
+      "status": "claimed",
+      "claimedBy": "Steve6",
+      "priority": 93,
+      "need": "logs>=2",
+      "updated": "2026-08-15T04:08:07.739Z"
+    },
+    {
+      "id": "gather-stock",
+      "type": "gather",
+      "status": "claimed",
+      "claimedBy": "Steve4",
+      "priority": 90,
+      "updated": "2026-08-15T04:08:11.053Z",
+      "item": "dirt",
+      "count": 8
+    },
+    {
+      "id": "gather-cobble",
+      "type": "gather",
+      "status": "open",
+      "claimedBy": null,
+      "priority": 86,
+      "item": "cobblestone",
+      "count": 16,
+      "updated": "2026-08-15T04:08:11.053Z"
+    },
+    {
+      "id": "deposit",
+      "type": "deposit",
+      "status": "open",
+      "claimedBy": null,
+      "priority": 80,
+      "need": "chest",
+      "updated": "2026-08-15T04:07:38.114Z"
+    },
+    {
+      "id": "place-camp",
+      "type": "build",
+      "status": "open",
+      "claimedBy": null,
+      "priority": 70,
+      "schematic": "camp",
+      "updated": "2026-08-15T04:08:11.053Z"
+    },
+    {
+      "id": "tend-farm",
+      "type": "farm",
+      "status": "open",
+      "claimedBy": null,
+      "priority": 60,
+      "updated": "2026-08-15T04:07:38.000Z"
+    },
+    {
+      "id": "guard-camp",
+      "type": "guard",
+      "status": "open",
+      "claimedBy": null,
+      "priority": 50,
+      "updated": "2026-08-15T04:07:38.000Z"
+    }
+  ],
+  "updated": "2026-08-15T04:08:11.053Z"
 }

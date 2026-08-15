@@ -155,3 +155,69 @@ Do not delete this heading. After the next process start, each event appends one
 - collectBlock.chestLocations=[] and itemFilter never-deposit so dirt is not dumped in a village chest. After collect(), restore no-jump movements.
 - Restarted ONCE via start-logged.sh. pid=560984 spawned 26.49 101.00 24.50 r=36.1 dirt=9. Said hey once. collectBlock=ready.
 - Watched ~45s: collect() was NOT called. dirt already >=8 so gather path idle; food hunt found no item/berry/mob in 14-16m, local wander stuck at 25.31 100.00 24.50 r=35.2 food_inv=0 bar=19 deaths=0. Left running. No second restart.
+- [2026-08-15T01:51:44.370Z] episode end score=56.35 sand=0 dirt=9 sandstone=0 house=no grief=0 473.5s pos=25.48 100.00 24.66 deaths=0 score=56.35
+- [2026-08-15T01:56:05.763Z] episode end score=31.77 sand=0 dirt=6 sandstone=0 house=no grief=0 257.7s pos=14.50 103.94 11.50 deaths=0 score=31.77
+
+## p4-food roam (2026-08-15 11:57 AM AEST / 01:57 UTC)
+- Glenn: Steve has to get food. Issue #1 p4-food.
+- Patched play.js: escapeHole first; do not lock chatMode=follow on spawn; come/stop still interrupt; follow is loose (GoalFollow range 8) while hunting; scan 32 for cow/pig/chicken/sheep, sweet_berry_bush, food item entities; kill one then collectBlock.collect drop; berries via collect(); if nothing in 16m path 20-30m new heading (refuse same 1x1); stay r>=24 unless Har0x inside spawn; say "hungry" once / "got food" on inv food. No plank grief.
+- node --check OK. Restarted ONCE via .bin/start-logged.sh. pid=592491 left running.
+- Spawned in hole at 14.50 102.94 11.50, pillar/jump escape, left_hole=yes, said hungry, phase=food.
+- First explore moved to ~30.70 102.53 6.76 (r=31). Later explores often failed no-jump path (same tile) then nudged to 29.71 102.00 8.70.
+- scan32: no drop/berry/mob. food_inv=0 bar=15 dirt=6 deaths=0. Did not move toward a mob (none in range). Har0x chat: "there's pigs over here".
+- Did not close https://github.com/gmcclelland90/grokbot-mineflayer/issues/1 (food_inv=0).
+- vision = entity packets + chat hints, not a camera.
+
+## Keep-alive 2026-08-15 12:01 PM AEST
+- p4-food PASSED: food_inv=2, following Har0x, pos ~-6.7 93 53.6, dirt=5, deaths=0, left_hole=yes
+- Did not restart (Glenn is playing). Next skill p5-sand.
+- [2026-08-15T02:17:07.442Z] episode end score=133.8 sand=0 dirt=8 sandstone=0 house=no grief=0 1258s pos=-3.92 91.00 53.31 deaths=0 score=133.8
+- [2026-08-15T02:18:18.920Z] episode death score=-5.38 sand=0 dirt=8 sandstone=0 house=no grief=0 66.2s pos=-3.92 91.00 53.31 deaths=1 score=-5.38
+- [2026-08-15T02:18:19.212Z] episode respawn score=0.03 sand=0 dirt=0 sandstone=0 house=no grief=0 0.3s pos=-3.92 91.00 53.31 deaths=1 score=0.03
+- [2026-08-15T02:31:06.610Z] episode end score=76.74 sand=0 dirt=0 sandstone=0 house=no grief=0 767.4s pos=4.61 102.00 2.24 deaths=1 score=76.74
+- [2026-08-15T02:36:09.481Z] episode end score=29.76 sand=0 dirt=0 sandstone=0 house=no grief=0 297.6s pos=4.61 101.94 2.30 deaths=0 score=29.76
+- [2026-08-15T02:42:39.712Z] episode end score=38.4 sand=0 dirt=0 sandstone=0 house=no grief=0 384s pos=4.61 101.94 2.30 deaths=0 score=38.4
+- [2026-08-15T02:45:29.963Z] episode end score=16.64 sand=0 dirt=0 sandstone=0 house=no grief=0 166.4s pos=4.61 101.94 2.30 deaths=0 score=16.64
+- [2026-08-15T02:48:26.225Z] episode end score=22.34 sand=0 dirt=5 sandstone=0 house=no grief=0 173.4s pos=42.70 103.00 30.24 deaths=0 score=22.34
+- [2026-08-15T02:55:13.910Z] episode end score=42.29 sand=0 dirt=2 sandstone=0 house=no grief=0 402.9s pos=81.70 118.00 79.32 deaths=0 score=42.29
+- [2026-08-15T03:00:03.226Z] episode death score=8.32 sand=0 dirt=0 sandstone=0 house=no grief=0 283.2s pos=85.70 117.00 76.04 deaths=1 score=8.32
+- [2026-08-15T03:00:03.518Z] episode respawn score=0.03 sand=0 dirt=0 sandstone=0 house=no grief=0 0.3s pos=85.70 117.00 76.04 deaths=1 score=0.03
+- [2026-08-15T03:02:21.273Z] episode end score=13.78 sand=0 dirt=0 sandstone=0 house=no grief=0 137.8s pos=-20.50 99.19 -16.70 deaths=1 score=13.78
+- [2026-08-15T03:05:21.682Z] episode death score=-2.53 sand=0 dirt=0 sandstone=0 house=no grief=0 174.7s pos=-13.54 97.00 9.69 deaths=1 score=-2.53
+- [2026-08-15T03:05:21.972Z] episode respawn score=0.03 sand=0 dirt=0 sandstone=0 house=no grief=0 0.3s pos=-13.54 97.00 9.69 deaths=1 score=0.03
+- [2026-08-15T03:06:54.431Z] episode death score=-10.75 sand=0 dirt=0 sandstone=0 house=no grief=0 92.5s pos=-13.72 98.00 7.70 deaths=2 score=-10.75
+- [2026-08-15T03:06:54.722Z] episode respawn score=0.03 sand=0 dirt=0 sandstone=0 house=no grief=0 0.3s pos=-13.50 98.00 7.70 deaths=2 score=0.03
+- [2026-08-15T03:11:17.995Z] episode end score=26.33 sand=0 dirt=0 sandstone=0 house=no grief=0 263.3s pos=10.33 114.00 -9.00 deaths=2 score=26.33
+- [2026-08-15T03:16:21.151Z] episode end score=29.94 sand=0 dirt=0 sandstone=0 house=no grief=0 299.4s pos=10.15 114.00 -9.11 deaths=0 score=29.94
+- [2026-08-15T03:17:54.225Z] episode end score=8.92 sand=0 dirt=0 sandstone=0 house=no grief=0 89.2s pos=10.15 114.00 -9.11 deaths=0 score=8.92
+- [2026-08-15T03:18:39.282Z] episode end score=4.02 sand=0 dirt=0 sandstone=0 house=no grief=0 40.2s pos=10.15 114.00 -9.11 deaths=0 score=4.02
+- [2026-08-15T03:19:47.272Z] episode end score=6.32 sand=0 dirt=0 sandstone=0 house=no grief=0 63.2s pos=14.73 107.00 -18.30 deaths=0 score=6.32
+- [2026-08-15T03:20:32.307Z] episode end score=4.02 sand=0 dirt=0 sandstone=0 house=no grief=0 40.2s pos=13.67 107.00 -18.32 deaths=0 score=4.02
+- [2026-08-15T03:25:26.239Z] episode end score=28.92 sand=0 dirt=0 sandstone=0 house=no grief=0 289.2s pos=13.67 107.00 -18.32 deaths=0 score=28.92
+- [2026-08-15T03:30:34.756Z] episode end score=48.57 sand=0 dirt=18 sandstone=0 house=no grief=0 305.7s pos=16.67 104.00 -18.50 deaths=0 score=48.57
+- [2026-08-15T03:40:27.585Z] episode end score=35.55 sand=0 dirt=25 sandstone=0 house=no grief=0 105.5s pos=16.31 105.00 -21.23 deaths=0 score=35.55
+- [2026-08-15T03:41:47.665Z] episode end score=33.63 sand=0 dirt=26 sandstone=0 house=no grief=0 76.3s pos=16.31 105.00 -21.60 deaths=0 score=33.63
+- [2026-08-15T03:47:06.251Z] episode kick score=119.38 sand=0 dirt=20 sandstone=0 house=no grief=0 43.8s pos=16.32 105.17 -20.38 deaths=0 score=119.38
+- [2026-08-15T03:47:57.170Z] episode kick score=34.09 sand=0 dirt=18 sandstone=0 house=no grief=0 60.9s pos=12.73 109.10 -22.49 deaths=0 score=34.09
+- [2026-08-15T04:01:18.565Z] episode end score=182.89 sand=0 dirt=0 sandstone=0 house=no grief=0 1828.9s pos=2.60 100.42 -5.30 deaths=0 score=182.89
+- [2026-08-15T04:01:18.574Z] episode end score=181.39 sand=0 dirt=0 sandstone=0 house=no grief=0 1813.9s pos=0.96 99.00 -5.30 deaths=0 score=181.39
+- [2026-08-15T04:01:18.574Z] episode end score=181.89 sand=0 dirt=0 sandstone=0 house=no grief=0 1818.9s pos=8.70 101.00 -1.41 deaths=0 score=181.89
+- [2026-08-15T04:01:18.578Z] episode end score=182.39 sand=0 dirt=0 sandstone=0 house=no grief=0 1823.9s pos=8.70 101.00 -3.18 deaths=0 score=182.39
+- [2026-08-15T04:01:18.591Z] episode end score=183.39 sand=0 dirt=0 sandstone=0 house=no grief=0 1833.9s pos=20.70 100.00 10.46 deaths=0 score=183.39
+- [2026-08-15T04:02:25.637Z] episode end score=4.48 sand=0 dirt=0 sandstone=0 house=no grief=0 44.8s pos=9.49 103.25 -2.64 deaths=0 score=4.48
+- [2026-08-15T04:03:37.478Z] episode kick score=25.2 sand=0 dirt=18 sandstone=0 house=no grief=0 72s pos=8.70 103.00 -5.28 deaths=0 score=25.2
+- [2026-08-15T04:03:55.302Z] episode end score=12.95 sand=0 dirt=0 sandstone=0 house=no grief=0 129.5s pos=14.69 103.00 4.09 deaths=0 score=12.95
+- [2026-08-15T04:03:55.352Z] episode end score=13.96 sand=0 dirt=0 sandstone=0 house=no grief=0 139.6s pos=-3.31 98.00 -1.29 deaths=0 score=13.96
+- [2026-08-15T04:04:14.331Z] episode death score=-3.15 sand=0 dirt=0 sandstone=0 house=no grief=0 168.5s pos=30.70 101.00 9.50 deaths=1 score=-3.15
+- [2026-08-15T04:04:14.612Z] episode respawn score=0.03 sand=0 dirt=0 sandstone=0 house=no grief=0 0.3s pos=30.70 101.00 9.50 deaths=1 score=0.03
+- [2026-08-15T04:04:15.285Z] episode death score=-3.55 sand=0 dirt=0 sandstone=0 house=no grief=0 164.5s pos=32.54 101.00 11.67 deaths=1 score=-3.55
+- [2026-08-15T04:04:15.498Z] episode respawn score=0.02 sand=0 dirt=0 sandstone=0 house=no grief=0 0.2s pos=32.54 101.00 11.67 deaths=1 score=0.02
+- [2026-08-15T04:05:28.328Z] episode end score=7.37 sand=0 dirt=0 sandstone=0 house=no grief=0 73.7s pos=0.47 99.75 14.56 deaths=1 score=7.37
+- [2026-08-15T04:05:28.328Z] episode end score=7.28 sand=0 dirt=0 sandstone=0 house=no grief=0 72.8s pos=22.59 103.94 5.36 deaths=1 score=7.28
+
+## Dump without wood (2026-08-15 2:05 PM AEST)
+- Steve froze at 12.50 108.96 -22.36 in phase=dump, dirt=18, house_blocks=3, chests=0, logs=0. Cannot craft a chest without wood and would not walk.
+- Fix: need-chest-but-no-logs → gather wood via collectBlock logs (range 64+, r>=24). place-dump stays `wait` until logs>=2. Stuck detector: same pos ~20s → repath. Mute "on it"/"camp up". Workers always claim a job.
+- [2026-08-15T04:06:19.185Z] episode death score=-15.69 sand=0 dirt=0 sandstone=0 house=no grief=0 43.1s pos=32.69 104.00 7.47 deaths=1 score=-15.69
+- [2026-08-15T04:06:19.473Z] episode respawn score=0.03 sand=0 dirt=0 sandstone=0 house=no grief=0 0.3s pos=32.69 104.00 7.47 deaths=1 score=0.03
+- [2026-08-15T04:07:38.525Z] episode kick score=32.05 sand=0 dirt=10 sandstone=0 house=no grief=0 220.5s pos=-15.58 99.10 25.94 deaths=0 score=32.05

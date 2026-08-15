@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { plog, sleep, horizFromOrigin, countNamed, countLogs, countSand, SPAWN_SAFE_R } from './lib.js'
+import { plog, sleep, horizFromOrigin, countNamed, countLogs, countPlanks, countSand, SPAWN_SAFE_R } from './lib.js'
 import { countFood } from './food.js'
 import { loadStorage, extrasToDump } from './storage.js'
 import { myName } from './cluster.js'
@@ -34,10 +34,14 @@ const FORAGE = [
 function emptyBoard() {
   return {
     queen: 'chat+keepalive',
-    workers: ['Steve'],
+    workers: ['Steve', 'Steve2', 'Steve3', 'Steve4', 'Steve5', 'Steve6'],
     jobs: [],
     updated: new Date().toISOString()
   }
+}
+
+function canCraftChest(bot) {
+  return countNamed(bot, ['chest']) >= 1 || countPlanks(bot) >= 8 || countLogs(bot) >= 2
 }
 
 function tryLock() {
@@ -77,7 +81,7 @@ export function loadJobs() {
     const j = JSON.parse(fs.readFileSync(FILE, 'utf8'))
     if (j && typeof j === 'object') {
       j.jobs = Array.isArray(j.jobs) ? j.jobs : []
-      if (!j.queen) j.queen = 'chat+keepalive'
+      j.queen = 'chat+keepalive'
       if (!j.workers) j.workers = ['Steve']
       return j
     }
@@ -88,7 +92,7 @@ export function loadJobs() {
 export function saveJobs(data) {
   const out = data || emptyBoard()
   out.updated = new Date().toISOString()
-  if (!out.queen) out.queen = 'chat+keepalive'
+  out.queen = 'chat+keepalive'
   try { fs.writeFileSync(FILE, JSON.stringify(out, null, 2) + '\n') } catch (err) {
     plog('jobs write fail ' + (err && err.message))
   }
@@ -151,26 +155,28 @@ export function seedForageIfEmpty(bot, state) {
   const hasChest = (loadStorage().chests || []).length > 0
 
   if (r < SPAWN_SAFE_R) upsertForage(board, 'leave-spawn', { status: 'open', claimedBy: null })
-  else {
-    const row = board.jobs.find((j) => j.id === 'leave-spawn')
-    // Only the worker who left spawn may mark it done; do not cancel a sibling still leaving.
-    if (row && row.status !== 'done' && row.status !== 'claimed') { row.status = 'done'; row.updated = nowIso() }
-  }
+  // Do not mark leave-spawn done for the hive just because THIS worker already left.
 
   if (Object.keys(missing).length) upsertForage(board, 'gather-stock', { status: 'open', claimedBy: null, item: Object.keys(missing)[0], count: missing[Object.keys(missing)[0]] })
   else {
     const row = board.jobs.find((j) => j.id === 'gather-stock')
     if (row && row.status === 'open') { row.status = 'done'; row.updated = nowIso() }
   }
-  if (missing.logs) upsertForage(board, 'gather-wood', { status: 'open', claimedBy: null, item: 'logs', count: missing.logs })
+  const logs = countLogs(bot)
+  if (logs < 8) upsertForage(board, 'gather-wood', { status: 'open', claimedBy: null, item: 'logs', count: Math.max(8 - logs, 2) })
   if (missing.cobblestone) upsertForage(board, 'gather-cobble', { status: 'open', claimedBy: null, item: 'cobblestone', count: missing.cobblestone })
 
   if (extras.length && hasChest) upsertForage(board, 'deposit', { status: 'open', claimedBy: null })
   const roles = new Set((loadStorage().chests || []).map((c) => c && c.role).filter(Boolean))
-  if (roles.size < 4) upsertForage(board, 'place-dump', { status: 'open', claimedBy: null })
+  if (roles.size < 4 && canCraftChest(bot)) upsertForage(board, 'place-dump', { status: 'open', claimedBy: null })
   else {
     const dump = board.jobs.find((j) => j.id === 'place-dump')
-    if (dump && dump.status !== 'done' && dump.status !== 'claimed') { dump.status = 'done'; dump.updated = nowIso() }
+    if (!dump) upsertForage(board, 'place-dump', { status: 'wait', claimedBy: null })
+    else if (dump.status !== 'claimed') {
+      dump.status = (roles.size < 4 && canCraftChest(bot)) ? 'open' : 'wait'
+      dump.claimedBy = null
+      dump.updated = nowIso()
+    }
   }
   if (!campBuilt) upsertForage(board, 'place-camp', { status: 'open', claimedBy: null, schematic: 'camp' })
   else {
@@ -180,7 +186,8 @@ export function seedForageIfEmpty(bot, state) {
     upsertForage(board, 'guard-camp', { status: 'open', claimedBy: null })
   }
 
-  board.workers = board.workers || ['Steve']
+  board.workers = ['Steve', 'Steve2', 'Steve3', 'Steve4', 'Steve5', 'Steve6']
+  board.queen = 'chat+keepalive'
   const me = myName()
   if (!board.workers.map((w) => String(w).toLowerCase()).includes(me.toLowerCase())) board.workers.push(me)
   saveJobs(board)
@@ -198,9 +205,11 @@ export async function claimNextJob(bot, state) {
       saveJobs(board)
       return mine
     }
-    const open = board.jobs.filter((j) => jobOpen(j)).sort((a, b) => (b.priority || 0) - (a.priority || 0))
+    let open = board.jobs.filter((j) => jobOpen(j)).sort((a, b) => (b.priority || 0) - (a.priority || 0))
+    if (horizFromOrigin(bot) >= SPAWN_SAFE_R) open = open.filter((j) => j.id !== 'leave-spawn')
+    if (!canCraftChest(bot)) open = open.filter((j) => j.id !== 'place-dump' && j.type !== 'dump')
     let job = open[0]
-    if (countLogs(bot) < 1) {
+    if (countLogs(bot) < 2) {
       const wood = open.find((j) => j.id === 'gather-wood' || j.item === 'logs')
       if (wood) job = wood
     }
@@ -267,6 +276,14 @@ export async function runClaimedJob(bot, state, job) {
       return !!dumped
     }
     if (job.id === 'place-dump' || job.type === 'dump') {
+      if (!canCraftChest(bot)) {
+        plog('jobs dump needs wood first logs=' + countLogs(bot))
+        state.phase = 'wood'
+        state.gatherName = 'logs'
+        state.gatherCount = 8
+        state.note = 'dump wait logs>=2, gather wood'
+        return runGather(bot, state)
+      }
       return ensureDumpChests(bot, state)
     }
     if (job.id === 'place-camp' || (job.type === 'build' && job.schematic === 'camp')) {
