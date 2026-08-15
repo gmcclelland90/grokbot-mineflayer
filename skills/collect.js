@@ -219,13 +219,16 @@ function underFeet(bot) {
   try { return bot.blockAt(new Vec3(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z))) } catch { return null }
 }
 
+const NATURAL_FLOOR = new Set(['dirt', 'grass_block', 'sand', 'red_sand', 'stone', 'cobblestone', 'gravel', 'sandstone', 'andesite', 'diorite', 'granite', 'coarse_dirt', 'podzol', 'mycelium'])
+
 function isPerch(bot) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
-  if (p.y >= 100) return true
   const u = underFeet(bot)
   const n = bareName(u && u.name)
-  if (!n) return false
+  if (NATURAL_FLOOR.has(n)) return false
+  if (p.y >= 108) return true
+  if (!n || n === 'air') return p.y >= 105
   if (isPlayerBuilt(u) || n.includes('planks') || n.includes('slab') || n.includes('stair') || n.includes('wool')) return true
   return false
 }
