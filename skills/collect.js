@@ -199,42 +199,94 @@ function isAirBlock(b) {
   return !b || n === 'air' || n === 'cave_air' || n === 'void_air'
 }
 
-export async function leaveRoof(bot, state) {
-  const p = bot.entity && bot.entity.position
-  if (!p) return false
-  const fx = Math.floor(p.x)
-  const fy = Math.floor(p.y)
-  const fz = Math.floor(p.z)
-  let ground = fy
-  for (let y = fy - 1; y >= fy - 16; y--) {
+function columnSurfaceY(bot, x, z, fromY) {
+  const y0 = Math.floor(fromY)
+  for (let y = y0 + 1; y >= y0 - 8; y--) {
     let b = null
     let a = null
     try {
-      b = bot.blockAt(new Vec3(fx, y, fz))
-      a = bot.blockAt(new Vec3(fx, y + 1, fz))
+      b = bot.blockAt(new Vec3(x, y, z))
+      a = bot.blockAt(new Vec3(x, y + 1, z))
     } catch {}
-    if (b && isSolid(b) && isAirBlock(a)) { ground = y + 1; break }
+    if (b && isSolid(b) && isAirBlock(a)) return y + 1
   }
-  const drop = fy - ground
-  if (drop < 2) return false
-  plog('leave roof y=' + fy + ' ground=' + ground + ' drop=' + drop + ' toward camp 32,0')
+  return null
+}
+
+function underFeet(bot) {
+  const p = bot.entity && bot.entity.position
+  if (!p) return null
+  try { return bot.blockAt(new Vec3(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z))) } catch { return null }
+}
+
+function isPerch(bot) {
+  const p = bot.entity && bot.entity.position
+  if (!p) return false
+  if (p.y >= 108) return true
+  const u = underFeet(bot)
+  const n = bareName(u && u.name)
+  if (!n) return false
+  if (isPlayerBuilt(u) || n.includes('planks') || n.includes('slab') || n.includes('stair') || n.includes('wool')) return true
+  return false
+}
+
+export async function leaveRoof(bot, state) {
+  const p = bot.entity && bot.entity.position
+  if (!p) return false
+  if (!isPerch(bot) && p.y < 108) return false
+  const fx = Math.floor(p.x)
+  const fy = Math.floor(p.y)
+  const fz = Math.floor(p.z)
+  const u = underFeet(bot)
+  plog('leave roof perch y=' + fy + ' under=' + ((u && u.name) || '?') + ' toward camp 32,0')
   state.note = 'off roof y=' + fy + ' -> camp'
-  const dirs = [[1, 0], [2, 0], [1, 1], [1, -1], [0, 1], [0, -1], [-1, 0], [3, 0], [4, 0]]
+  let stair = null
+  try {
+    stair = bot.findBlock({
+      matching: (b) => {
+        const n = bareName(b && b.name)
+        return n.includes('stairs') || n === 'ladder'
+      },
+      maxDistance: 16,
+      point: p
+    })
+  } catch {}
+  if (stair && stair.position) {
+    plog('leave roof via ' + stair.name + ' at ' + stair.position.x + ' ' + stair.position.y + ' ' + stair.position.z)
+    try { await gotoNear(bot, stair.position.x, stair.position.y, stair.position.z, 1, 6000) } catch {}
+    return true
+  }
+  const dirs = [[1, 0], [2, 0], [1, 1], [1, -1], [2, 1], [2, -1], [0, 1], [0, -1], [3, 0], [-1, 0], [0, 2], [0, -2]]
+  let best = null
+  let bestScore = -999
   for (const [dx, dz] of dirs) {
     const nx = fx + dx
     const nz = fz + dz
-    let at = null
-    let below = null
-    try {
-      at = bot.blockAt(new Vec3(nx, fy, nz))
-      below = bot.blockAt(new Vec3(nx, fy - 1, nz))
-    } catch {}
-    if (!isAirBlock(at)) continue
-    if (isSolid(below) && !isPlayerBuilt(below)) continue
-    try { await gotoNear(bot, nx + 0.5, fy - 1, nz + 0.5, 1, 3500) } catch {}
+    const sy = columnSurfaceY(bot, nx, nz, fy)
+    if (sy == null) continue
+    if (sy > fy) continue
+    const drop = fy - sy
+    if (drop > 2) continue
+    const toward = -Math.hypot(nx - 32, nz - 0)
+    const score = drop * 8 + toward
+    if (score > bestScore) { bestScore = score; best = { x: nx, y: sy, z: nz, drop } }
+  }
+  if (best) {
+    plog('leave roof step drop=' + best.drop + ' to ' + best.x + ' ' + best.y + ' ' + best.z)
+    try { await gotoNear(bot, best.x + 0.5, best.y, best.z + 0.5, 1, 5000) } catch {}
     return true
   }
-  try { await gotoNear(bot, 32, Math.max(ground, fy - 6), 0, 3, 8000) } catch {}
+  try {
+    const yaw = Math.atan2(-(32 - p.x), (0 - p.z))
+    await bot.look(yaw, 0, true)
+    bot.setControlState('forward', true)
+    bot.setControlState('sprint', false)
+    await sleep(1600)
+  } catch {}
+  try {
+    bot.setControlState('forward', false)
+    bot.setControlState('jump', false)
+  } catch {}
   return true
 }
 
@@ -250,7 +302,9 @@ export async function leaveSpawnForGather(bot, state) {
   state.phase = 'leave-spawn'
   state.note = 'leaving spawn toward camp 32,0'
   stopPath(bot)
-  if (bot.pathfinder && goals && goals.GoalXZ) {
+  if (p.y >= 108) {
+    try { await leaveRoof(bot, state) } catch {}
+  } else if (bot.pathfinder && goals && goals.GoalXZ) {
     try {
       const g = new goals.GoalXZ(tx, tz)
       const pth = bot.pathfinder.goto(g)
@@ -260,8 +314,9 @@ export async function leaveSpawnForGather(bot, state) {
       try { bot.pathfinder.setGoal(null) } catch {}
     }
   }
-  const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R
-  if (!ok) await sleep(2000)
+  const here = bot.entity && bot.entity.position
+  const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R && here && here.y < 110
+  if (!ok) await sleep(400)
   return ok
 }
 
