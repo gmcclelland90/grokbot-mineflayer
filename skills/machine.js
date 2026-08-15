@@ -1,5 +1,5 @@
 import stateMachine from 'mineflayer-statemachine'
-import { inHole, escapeHole } from './escape.js'
+import { escapeHole, holeActive, playerPreemptsEscape } from './escape.js'
 import { huntSand, huntBlock, leaveSpawnForGather } from './collect.js'
 import { startFollow, comeNow } from './follow.js'
 import { idleTick } from './idle.js'
@@ -51,8 +51,8 @@ function shouldCollect(state, bot) {
   return false
 }
 
-function hole(bot) {
-  try { return inHole(bot) } catch { return false }
+function hole(bot, state) {
+  try { return holeActive(bot, state) } catch { return false }
 }
 
 function hostile(bot, d = 8) {
@@ -88,8 +88,13 @@ class SkillState {
 }
 
 async function runEscape(bot, ctx, still) {
-  while (still() && hole(bot) && !ctx.state.dead) {
-    await escapeHole(bot, ctx.state)
+  while (still() && hole(bot, ctx.state) && !ctx.state.dead) {
+    if (playerPreemptsEscape(ctx.state)) {
+      plog('escape abort, player cmd ' + ctx.state.chatMode)
+      return
+    }
+    const ok = await escapeHole(bot, ctx.state)
+    if (!ok) return
   }
 }
 
@@ -475,42 +480,42 @@ export function startStateMachine(bot, state) {
       parent: work,
       child: escape,
       name: 'work->escape',
-      shouldTransition: () => hole(bot),
+      shouldTransition: () => hole(bot, state),
       onTransition: () => plog('transition work->escape')
     }),
     new StateTransition({
       parent: work,
       child: flee,
       name: 'work->flee',
-      shouldTransition: () => !hole(bot) && !!hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !!hostile(bot, 8),
       onTransition: () => plog('transition work->flee')
     }),
     new StateTransition({
       parent: escape,
       child: flee,
       name: 'escape->flee',
-      shouldTransition: () => !hole(bot) && !!hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !!hostile(bot, 8),
       onTransition: () => plog('transition escape->flee')
     }),
     new StateTransition({
       parent: escape,
       child: work,
       name: 'escape->work',
-      shouldTransition: () => !hole(bot) && !hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !hostile(bot, 8),
       onTransition: () => plog('transition escape->work')
     }),
     new StateTransition({
       parent: flee,
       child: escape,
       name: 'flee->escape',
-      shouldTransition: () => hole(bot),
+      shouldTransition: () => hole(bot, state),
       onTransition: () => plog('transition flee->escape')
     }),
     new StateTransition({
       parent: flee,
       child: work,
       name: 'flee->work',
-      shouldTransition: () => !hole(bot) && !hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !hostile(bot, 8),
       onTransition: () => plog('transition flee->work')
     })
   ]

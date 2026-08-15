@@ -1,4 +1,8 @@
 import { Vec3, plog, sleep, posOf, isSolid, resolveItemName, countNamed, clearMove } from './lib.js'
+import { leaveSpawnForGather } from './collect.js'
+
+const PLAYER_CMDS = new Set(['come', 'follow', 'stay', 'wood', 'collect', 'craft', 'place', 'build', 'table', 'shovel', 'pick'])
+const GIVE_UP_MS = 45000
 
 function sideSolid(bot, p, dx, dz, dy) {
   try {
@@ -8,64 +12,46 @@ function sideSolid(bot, p, dx, dz, dy) {
   }
 }
 
-function cannotPathTwoBlocks(bot) {
-  try {
-    const p = bot.entity.position.floored()
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-    for (const [dx, dz] of dirs) {
-      let open = true
-      for (let step = 1; step <= 2; step++) {
-        const body = bot.blockAt(p.offset(dx * step, 0, dz * step))
-        const head = bot.blockAt(p.offset(dx * step, 1, dz * step))
-        if (isSolid(body) || isSolid(head)) {
-          open = false
-          break
-        }
-      }
-      if (open) return false
-    }
-    return true
-  } catch {
-    return false
-  }
+export function playerPreemptsEscape(state) {
+  if (!state) return false
+  return PLAYER_CMDS.has(state.chatMode)
 }
 
 export function inHole(bot) {
+  // Strict: only a real 1-block pit (feet boxed in AND a jumpable rim).
+  // Village streets / standing next to house walls are NOT holes.
   try {
     const p = bot.entity.position.floored()
-    let bodyWalls = 0
-    let headWalls = 0
-    let highGround = 0
+    let feetWalls = 0
+    let jumpableRim = 0
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      if (sideSolid(bot, p, dx, dz, 0)) bodyWalls++
-      if (sideSolid(bot, p, dx, dz, 1)) headWalls++
-      if (sideSolid(bot, p, dx, dz, 1) || sideSolid(bot, p, dx, dz, 2)) highGround++
+      const feet = sideSolid(bot, p, dx, dz, 0)
+      const head = sideSolid(bot, p, dx, dz, 1)
+      if (feet) feetWalls++
+      if (feet && !head) jumpableRim++
     }
-    if (bodyWalls >= 3 || headWalls >= 3 || highGround >= 3) return true
-    if (cannotPathTwoBlocks(bot)) return true
-    return false
+    return feetWalls >= 3 && jumpableRim >= 1
   } catch {
     return false
   }
 }
 
 export function isOneBlockHole(bot) {
+  return inHole(bot)
+}
+
+export function holeActive(bot, state) {
   try {
-    const p = bot.entity.position.floored()
-    let feetWalls = 0
-    let headWalls = 0
-    let jumpableRim = 0
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const feet = sideSolid(bot, p, dx, dz, 0)
-      const head = sideSolid(bot, p, dx, dz, 1)
-      if (feet) feetWalls++
-      if (head) headWalls++
-      if (feet && !head) jumpableRim++
-    }
-    return feetWalls >= 3 && headWalls <= 1 && jumpableRim >= 1
+    if (playerPreemptsEscape(state)) return false
+    if (state && state.escapeGiveUpUntil && Date.now() < state.escapeGiveUpUntil) return false
+    return inHole(bot)
   } catch {
     return false
   }
+}
+
+function dirtCount(bot) {
+  return countNamed(bot, ['dirt', 'grass_block'])
 }
 
 async function jumpOut(bot) {
@@ -99,9 +85,9 @@ async function pillarOut(bot) {
     const p = bot.entity.position
     const x = Math.floor(p.x)
     const z = Math.floor(p.z)
-    const y0 = Math.floor(p.y)
+    const yFloor = Math.floor(p.y)
     for (let dy = 0; dy >= -5; dy--) {
-      const b = bot.blockAt(new Vec3(x, y0 + dy, z))
+      const b = bot.blockAt(new Vec3(x, yFloor + dy, z))
       if (b && b.name && b.name !== 'air' && b.name !== 'cave_air' && b.name !== 'void_air' && isSolid(b)) {
         under = b
         break
@@ -135,7 +121,27 @@ async function pillarOut(bot) {
   return placed || y1 > y0 + 0.35
 }
 
+async function giveUpAndCollect(bot, state, why) {
+  state.escapeGiveUpUntil = Date.now() + GIVE_UP_MS
+  state.leftHole = !inHole(bot)
+  state.phase = 'escape-giveup'
+  state.note = 'escape give up: ' + why
+  plog('escape give up: ' + why + ' pos=' + (posOf(bot) && posOf(bot).str) + ' — walk r>=24 then collect')
+  await clearMove(bot)
+  try {
+    await leaveSpawnForGather(bot, state)
+  } catch (err) {
+    plog('escape leave-spawn fail ' + (err && err.message))
+  }
+  return false
+}
+
 export async function escapeHole(bot, state) {
+  if (playerPreemptsEscape(state)) {
+    plog('escape preempted by chat ' + state.chatMode)
+    await clearMove(bot)
+    return false
+  }
   if (!inHole(bot)) {
     state.leftHole = true
     return true
@@ -143,11 +149,20 @@ export async function escapeHole(bot, state) {
   state.leftHole = false
   state.phase = 'escape'
   const start = posOf(bot)
-  const dirtN = countNamed(bot, ['dirt', 'grass_block'])
+  const dirtN = dirtCount(bot)
   plog('escape start ' + (start && start.str) + ' dirt=' + dirtN + ' oneBlock=' + isOneBlockHole(bot))
+  if (dirtN < 1) {
+    return giveUpAndCollect(bot, state, 'no dirt')
+  }
   const deadline = Date.now() + 25000
   let jumped = false
+  let pillarFails = 0
   while (Date.now() < deadline && !state.dead) {
+    if (playerPreemptsEscape(state)) {
+      plog('escape preempted by chat ' + state.chatMode)
+      await clearMove(bot)
+      return false
+    }
     if (!inHole(bot)) {
       state.leftHole = true
       plog('left hole at ' + (posOf(bot) && posOf(bot).str))
@@ -160,6 +175,9 @@ export async function escapeHole(bot, state) {
       await sleep(250)
       continue
     }
+    if (dirtCount(bot) < 1) {
+      return giveUpAndCollect(bot, state, 'no dirt after jump')
+    }
     const ok = await pillarOut(bot)
     if (ok && !inHole(bot)) {
       state.leftHole = true
@@ -167,12 +185,21 @@ export async function escapeHole(bot, state) {
       await clearMove(bot)
       return true
     }
+    if (!ok) {
+      pillarFails++
+      if (dirtCount(bot) < 1 || pillarFails >= 3) {
+        return giveUpAndCollect(bot, state, dirtCount(bot) < 1 ? 'no dirt' : ('pillar fail x' + pillarFails))
+      }
+    }
     await sleep(150)
   }
-  if (!inHole(bot)) state.leftHole = true
-  plog('escape done left=' + state.leftHole + ' pos=' + (posOf(bot) && posOf(bot).str))
-  await clearMove(bot)
-  return !!state.leftHole
+  if (!inHole(bot)) {
+    state.leftHole = true
+    plog('escape done left=true pos=' + (posOf(bot) && posOf(bot).str))
+    await clearMove(bot)
+    return true
+  }
+  return giveUpAndCollect(bot, state, 'timeout still in hole')
 }
 
 export async function run(bot, state) {

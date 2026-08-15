@@ -1,4 +1,4 @@
-export { inHole, escapeHole, isOneBlockHole } from './escape.js'
+export { inHole, escapeHole, isOneBlockHole, holeActive, playerPreemptsEscape } from './escape.js'
 export { huntSand, findSand, huntBlock, leaveSpawnForGather } from './collect.js'
 export { startFollow, comeNow, honorFollow } from './follow.js'
 export { idleTick } from './idle.js'
