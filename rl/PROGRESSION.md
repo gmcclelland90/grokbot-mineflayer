@@ -17,7 +17,7 @@ Climb in order. Do not skip to house. Stay outside spawn (r>=24) for any gather/
 13. Wooden pick / shovel
 14. Free play: wander, gather, build, stay alive
 15. Interact with other players and Mineflayer bots (chat, follow, not grief)
-16. Chat listen: hi/hey/hello -> hey; come/follow/stop; !craft !wood !place !table !shovel !pick — DOING
+16. Chat listen: hi/hey/hello -> hey; come/follow/stop; !craft !wood !place !table !shovel !pick !build !hut — DOING
 
 Rules: one step at a time. Restart only when the live brain cannot do the current step. Chat: greet hey (20s), come/follow/stop, short say; else mute except house up.
 

@@ -7,6 +7,7 @@ import { nearestHostile, fleeHostile } from './flee.js'
 import { runCraft } from './craft.js'
 import { gatherWood } from './wood.js'
 import { placeHeld } from './place.js'
+import { buildNamed } from './build.js'
 import { plog, sleep, stopPath, findPlayerNamed, horizFromOrigin, countSand, SPAWN_SAFE_R } from './lib.js'
 
 function smApi(mod) {
@@ -34,8 +35,12 @@ function wantPlace(state) {
   return state.chatMode === 'place'
 }
 
+function wantBuild(state) {
+  return state.chatMode === 'build'
+}
+
 function wantSkill(state) {
-  return wantWood(state) || wantCraft(state) || wantPlace(state)
+  return wantWood(state) || wantCraft(state) || wantPlace(state) || wantBuild(state)
 }
 
 function shouldCollect(state, bot) {
@@ -166,6 +171,17 @@ async function runPlace(bot, ctx, still) {
   if (state.chatMode === 'place') state.chatMode = null
 }
 
+async function runBuild(bot, ctx, still) {
+  const state = ctx.state
+  if (!still() || state.dead) return
+  try {
+    await buildNamed(bot, state, state.buildName || 'hut')
+  } catch (err) {
+    plog('build skill fail ' + (err && err.message))
+  }
+  if (state.chatMode === 'build') state.chatMode = null
+}
+
 export function startStateMachine(bot, state) {
   const { StateTransition, BotStateMachine, NestedStateMachine, BehaviorIdle, BehaviorFollowEntity } = smApi(stateMachine)
   const ctx = { state, bot }
@@ -177,6 +193,7 @@ export function startStateMachine(bot, state) {
   const wood = new SkillState('wood', bot, ctx, runWood)
   const craft = new SkillState('craft', bot, ctx, runCraftSkill)
   const place = new SkillState('place', bot, ctx, runPlace)
+  const build = new SkillState('build', bot, ctx, runBuild)
 
   const idle = new BehaviorIdle()
   idle.stateName = 'idle'
@@ -331,7 +348,7 @@ export function startStateMachine(bot, state) {
       parent: wood,
       child: idle,
       name: 'wood->idle',
-      shouldTransition: () => !wantWood(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantCraft(state) && !wantPlace(state),
+      shouldTransition: () => !wantWood(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantCraft(state) && !wantPlace(state) && !wantBuild(state),
       onTransition: () => plog('transition wood->idle')
     }),
     new StateTransition({
@@ -352,7 +369,7 @@ export function startStateMachine(bot, state) {
       parent: craft,
       child: idle,
       name: 'craft->idle',
-      shouldTransition: () => !wantCraft(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantPlace(state),
+      shouldTransition: () => !wantCraft(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantPlace(state) && !wantBuild(state),
       onTransition: () => plog('transition craft->idle')
     }),
     new StateTransition({
@@ -373,7 +390,7 @@ export function startStateMachine(bot, state) {
       parent: place,
       child: idle,
       name: 'place->idle',
-      shouldTransition: () => !wantPlace(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state),
+      shouldTransition: () => !wantPlace(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state) && !wantBuild(state),
       onTransition: () => plog('transition place->idle')
     }),
     new StateTransition({
@@ -382,7 +399,72 @@ export function startStateMachine(bot, state) {
       name: 'place->collect',
       shouldTransition: () => !wantPlace(state) && !wantFollow(state) && shouldCollect(state, bot),
       onTransition: () => plog('transition place->collect')
+    }),
+
+    new StateTransition({
+      parent: idle,
+      child: build,
+      name: 'idle->build',
+      shouldTransition: () => wantBuild(state),
+      onTransition: () => plog('transition idle->build')
+    }),
+    new StateTransition({
+      parent: collect,
+      child: build,
+      name: 'collect->build',
+      shouldTransition: () => wantBuild(state),
+      onTransition: () => plog('transition collect->build')
+    }),
+    new StateTransition({
+      parent: follow,
+      child: build,
+      name: 'follow->build',
+      shouldTransition: () => !wantFollow(state) && wantBuild(state),
+      onTransition: () => plog('transition follow->build')
+    }),
+    new StateTransition({
+      parent: wood,
+      child: build,
+      name: 'wood->build',
+      shouldTransition: () => !wantWood(state) && wantBuild(state),
+      onTransition: () => plog('transition wood->build')
+    }),
+    new StateTransition({
+      parent: craft,
+      child: build,
+      name: 'craft->build',
+      shouldTransition: () => !wantCraft(state) && wantBuild(state),
+      onTransition: () => plog('transition craft->build')
+    }),
+    new StateTransition({
+      parent: place,
+      child: build,
+      name: 'place->build',
+      shouldTransition: () => !wantPlace(state) && wantBuild(state),
+      onTransition: () => plog('transition place->build')
+    }),
+    new StateTransition({
+      parent: build,
+      child: follow,
+      name: 'build->follow',
+      shouldTransition: () => wantFollow(state),
+      onTransition: () => plog('transition build->follow')
+    }),
+    new StateTransition({
+      parent: build,
+      child: idle,
+      name: 'build->idle',
+      shouldTransition: () => !wantBuild(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state) && !wantPlace(state),
+      onTransition: () => plog('transition build->idle')
+    }),
+    new StateTransition({
+      parent: build,
+      child: collect,
+      name: 'build->collect',
+      shouldTransition: () => !wantBuild(state) && !wantFollow(state) && shouldCollect(state, bot),
+      onTransition: () => plog('transition build->collect')
     })
+
   ]
 
   const work = new NestedStateMachine(workTransitions, idle)
@@ -452,6 +534,6 @@ export function startStateMachine(bot, state) {
 
   state.useMachine = true
   state.smState = 'work'
-  plog('state machine live nested=work(idle,follow,collect,wood,craft,place) root(escape,flee,work) no auto-follow')
+  plog('state machine live nested=work(idle,follow,collect,wood,craft,place,build) root(escape,flee,work) no auto-follow')
   return machine
 }

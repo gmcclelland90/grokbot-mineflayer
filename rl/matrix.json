@@ -1,6 +1,6 @@
 {
   "current": "p5-sand",
-  "updated": "2026-08-15T02:40:00Z",
+  "updated": "2026-08-15T02:50:00Z",
   "loop": "attempt current skill -> score episode -> mark pass/fail -> stay or advance",
   "skills": [
     {
@@ -99,7 +99,7 @@
       ],
       "attempts": 0,
       "last_score": null,
-      "note": ""
+      "note": "build.js + schematics/hut.json wired (!build !hut); not done until Steve places a hut"
     },
     {
       "id": "p10-follow",
@@ -180,7 +180,7 @@
       ],
       "attempts": 1,
       "last_score": null,
-      "note": "listener live; !come !follow !stop !stay !collect !hungry !craft !wood !place !table !shovel !pick; 2026-08-15 12:40 AEST"
+      "note": "listener live; !come !follow !stop !stay !collect !hungry !craft !wood !place !table !shovel !pick !build !hut; 2026-08-15 12:50 AEST"
     }
   ]
 }
