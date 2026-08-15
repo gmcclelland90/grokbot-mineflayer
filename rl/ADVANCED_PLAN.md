@@ -41,3 +41,7 @@ P6: free play. Brain only sets goals. Hands run forever.
 - Not cloning Voyager/Mindcraft wholesale (wrong version, their LLM keys, LAN assumptions).
 - Not neural RL on this box.
 - Not another 2000-line play.js.
+
+## Iterate loop
+
+Keep-alive every 2 hours runs `ITERATE.md`: fail -> gh issue on grokbot-mineflayer -> patch play.js -> restart start-logged.sh once -> watch STATUS -> comment issue -> close on pass -> next matrix skill. Actions CI is only syntax / matrix graph / scoreEpisode.
