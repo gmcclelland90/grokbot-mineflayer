@@ -222,7 +222,7 @@ function underFeet(bot) {
 function isPerch(bot) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
-  if (p.y >= 108) return true
+  if (p.y >= 100) return true
   const u = underFeet(bot)
   const n = bareName(u && u.name)
   if (!n) return false
@@ -300,13 +300,13 @@ export async function leaveSpawnForGather(bot, state) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
   const r0 = horizFromOrigin(bot)
-  if (r0 >= SPAWN_SAFE_R && (p.y < 110)) return true
+  if (r0 >= SPAWN_SAFE_R && (p.y < 102)) return true
   const tx = 32
   const tz = 0
   plog('collect leave-spawn r=' + r0.toFixed(1) + ' y=' + p.y.toFixed(1) + ' -> camp 32,0')
   state.phase = 'leave-spawn'
   state.note = 'leaving spawn toward camp 32,0'
-  if (p.y >= 108 || isPerch(bot)) {
+  if (p.y >= 100 || isPerch(bot)) {
     try { await leaveRoof(bot, state) } catch (err) { plog('leave roof fail ' + (err && err.message)) }
   } else if (bot.pathfinder && goals && goals.GoalXZ) {
     try {
@@ -319,7 +319,7 @@ export async function leaveSpawnForGather(bot, state) {
     }
   }
   const here = bot.entity && bot.entity.position
-  const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R && here && here.y < 110
+  const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R && here && here.y < 102
   if (!ok) await sleep(400)
   return ok
 }
