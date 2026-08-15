@@ -195,24 +195,33 @@ export async function claimNextJob(bot, state) {
     const board = seedForageIfEmpty(bot, state)
     expireStaleClaims(board)
     const me = myName()
+    const chests = ((loadStorage().chests) || []).length
     const mine = board.jobs.find((j) => j.status === 'claimed' && String(j.claimedBy || '').toLowerCase() === me.toLowerCase())
-    if (mine) {
+    if (mine && !(chests < 1 && canCraftChest(bot) && mine.id !== 'place-dump' && mine.type !== 'dump')) {
       mine.updated = nowIso()
       saveJobs(board)
       return mine
+    }
+    if (mine && chests < 1 && canCraftChest(bot)) {
+      mine.status = 'open'
+      mine.claimedBy = null
+      mine.updated = nowIso()
+      plog('jobs release ' + mine.id + ' so ' + me + ' can dump')
     }
     let open = board.jobs.filter((j) => jobOpen(j)).sort((a, b) => (b.priority || 0) - (a.priority || 0))
     if (horizFromOrigin(bot) >= SPAWN_SAFE_R) open = open.filter((j) => j.id !== 'leave-spawn')
     if (!canCraftChest(bot)) open = open.filter((j) => j.id !== 'place-dump' && j.type !== 'dump')
     let job = open[0]
-    if (countLogs(bot) < 2) {
+    if (chests < 1 && canCraftChest(bot)) {
+      const dump = open.find((j) => j.id === 'place-dump' || j.type === 'dump')
+      if (dump) job = dump
+    } else if (countLogs(bot) < 2) {
       const wood = open.find((j) => j.id === 'gather-wood' || j.item === 'logs')
       if (wood) job = wood
     }
     if (!job) {
       const logs = countLogs(bot)
       const dirt = countNamed(bot, ['dirt', 'grass_block'])
-      const chests = ((loadStorage().chests) || []).length
       if (logs < 8) job = { id: 'work-wood-' + me, type: 'gather', item: 'logs', count: 8, priority: 88, personal: true }
       else if (dirt < 8) job = { id: 'work-dirt-' + me, type: 'gather', item: 'dirt', count: 8, priority: 86, personal: true }
       else if (chests < 1) job = { id: 'work-dump-' + me, type: 'dump', priority: 84, personal: true }

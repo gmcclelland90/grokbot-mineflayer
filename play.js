@@ -2597,14 +2597,16 @@ export function startPlayLoop(bot) {
   }
   const myCommandFile = path.join(__dirname, 'rl', 'command-' + String(bot.username || 'Steve') + '.json')
   const isPrimary = String(bot.username || 'Steve') === 'Steve'
-  const cmdPoll = setInterval(() => {
+  function pollCommands() {
     try {
       applyCommandFile(myCommandFile, 'command-' + String(bot.username || 'Steve') + '.json')
       applyCommandFile(COMMAND_FILE, 'command.json', { requireDest: !isPrimary })
     } catch (err) {
       plog('command.json fail ' + (err && err.message))
     }
-  }, 2000)
+  }
+  pollCommands()
+  const cmdPoll = setInterval(pollCommands, 2000)
   if (cmdPoll && cmdPoll.unref) cmdPoll.unref()
 
   // spawn: escape then follow Har0x + "coming" (no hey)
@@ -2699,6 +2701,7 @@ export function startPlayLoop(bot) {
       } catch {}
       writeStatus(bot, state)
       await sleep(600)
+      pollCommands()
       try {
         startStateMachine(bot, state)
         plog('commands live !come !follow !stop !stay !collect [block] !hungry !craft [item] !wood !place !table !shovel !pick !build [name] !hut !camp !farm [wheat|trees] !gather [item] [count] !chest !store !withdraw [item] [count] !sleep !guard on/off (bang optional; over here=come)')
