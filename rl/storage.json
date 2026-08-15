@@ -1,20 +1,58 @@
 {
   "camp": {
     "x": 32,
-    "y": null,
+    "y": 108,
     "z": 0,
     "r": 32
   },
   "farms": {},
   "chests": [],
   "targets": {
-    "dirt": 32,
+    "dirt": 18,
     "cobblestone": 16,
     "logs": 8,
     "food": 8,
     "sand": 8,
     "wheat_seeds": 16
   },
-  "missing": {},
-  "updated": "2026-08-15T03:11:00Z"
+  "missing": {
+    "cobblestone": 16,
+    "logs": 8,
+    "food": 8,
+    "sand": 8,
+    "wheat_seeds": 16
+  },
+  "updated": "2026-08-15T03:48:19.414Z",
+  "dumpPlan": [
+    {
+      "role": "terrain",
+      "dx": 1,
+      "dz": -1,
+      "label": "dirt/sand"
+    },
+    {
+      "role": "stone",
+      "dx": 3,
+      "dz": -1,
+      "label": "cobble/stone"
+    },
+    {
+      "role": "wood",
+      "dx": 5,
+      "dz": -1,
+      "label": "wood/logs/planks"
+    },
+    {
+      "role": "food",
+      "dx": 7,
+      "dz": -1,
+      "label": "food/seeds"
+    },
+    {
+      "role": "misc",
+      "dx": 9,
+      "dz": -1,
+      "label": "misc"
+    }
+  ]
 }

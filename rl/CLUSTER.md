@@ -43,8 +43,9 @@ Never pvp/attack usernames in `cluster.json` names (Steve, Steve2, …). Same `!
 ## Job priority (foraging)
 
 1. leave-spawn (off roofs / r>=24, walk toward camp 32,0)
-2. gather missing stock
-3. deposit extras
-4. place camp
-5. tend farm
-6. guard camp
+2. place-dump (4+1 labeled camp chests: terrain/stone/wood/food/misc) if roles missing
+3. gather missing stock
+4. deposit extras to the matching role chest
+5. place camp
+6. tend farm
+7. guard camp
