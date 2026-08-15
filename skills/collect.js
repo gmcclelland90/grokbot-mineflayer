@@ -303,15 +303,18 @@ export async function leaveSpawnForGather(bot, state) {
   const p = bot.entity && bot.entity.position
   if (!p) return false
   const r0 = horizFromOrigin(bot)
-  if (r0 >= SPAWN_SAFE_R && (p.y < 102)) return true
+  // Grass hills can be y>=102. Done once outside spawn and not on a real perch.
+  if (r0 >= SPAWN_SAFE_R && !isPerch(bot)) return true
   const tx = 32
   const tz = 0
   plog('collect leave-spawn r=' + r0.toFixed(1) + ' y=' + p.y.toFixed(1) + ' -> camp 32,0')
   state.phase = 'leave-spawn'
   state.note = 'leaving spawn toward camp 32,0'
-  if (p.y >= 100 || isPerch(bot)) {
+  if (isPerch(bot)) {
     try { await leaveRoof(bot, state) } catch (err) { plog('leave roof fail ' + (err && err.message)) }
-  } else if (bot.pathfinder && goals && goals.GoalXZ) {
+  }
+  // 08aa544: dirt/grass is not a roof. Must still walk to camp — do not no-op at y>=100.
+  if (!isPerch(bot) && bot.pathfinder && goals && goals.GoalXZ) {
     try {
       const g = new goals.GoalXZ(tx, tz)
       const pth = bot.pathfinder.goto(g)
@@ -319,10 +322,20 @@ export async function leaveSpawnForGather(bot, state) {
       await Promise.race([pth, t])
     } catch {
       try { bot.pathfinder.setGoal(null) } catch {}
+      try {
+        const here = bot.entity && bot.entity.position
+        if (here && Math.hypot(here.x - p.x, here.z - p.z) < 0.5) {
+          const yaw = Math.atan2(-(tx - here.x), (tz - here.z))
+          await bot.look(yaw, 0, true)
+          bot.setControlState('forward', true)
+          await sleep(1600)
+          bot.setControlState('forward', false)
+        }
+      } catch {}
     }
   }
   const here = bot.entity && bot.entity.position
-  const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R && here && here.y < 102
+  const ok = horizFromOrigin(bot) >= SPAWN_SAFE_R && here && !isPerch(bot)
   if (!ok) await sleep(400)
   return ok
 }

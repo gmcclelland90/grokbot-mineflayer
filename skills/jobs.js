@@ -22,6 +22,8 @@ const LOCK_MS = 8000
 const FORAGE = [
   { id: 'leave-spawn', type: 'gather', priority: 100 },
   { id: 'gather-stock', type: 'gather', priority: 90 },
+  { id: 'gather-wood', type: 'gather', item: 'logs', priority: 88 },
+  { id: 'gather-cobble', type: 'gather', item: 'cobblestone', priority: 86 },
   { id: 'deposit', type: 'deposit', priority: 80 },
   { id: 'place-camp', type: 'build', schematic: 'camp', priority: 70 },
   { id: 'tend-farm', type: 'farm', priority: 60 },
@@ -107,7 +109,19 @@ function upsertForage(board, id, extra) {
   if (!row) {
     row = { id, type: proto.type, status: 'open', claimedBy: null, priority: proto.priority, updated: nowIso() }
     if (proto.schematic) row.schematic = proto.schematic
+    if (proto.item) row.item = proto.item
     board.jobs.push(row)
+  }
+  // Never steal a live claim (N>1 hive).
+  if (row.status === 'claimed' && row.claimedBy) {
+    if (extra) {
+      const keep = Object.assign({}, extra)
+      delete keep.status
+      delete keep.claimedBy
+      Object.assign(row, keep)
+    }
+    row.updated = nowIso()
+    return
   }
   Object.assign(row, extra || {})
   row.updated = nowIso()
@@ -125,7 +139,8 @@ export function seedForageIfEmpty(bot, state) {
   if (r < SPAWN_SAFE_R) upsertForage(board, 'leave-spawn', { status: 'open', claimedBy: null })
   else {
     const row = board.jobs.find((j) => j.id === 'leave-spawn')
-    if (row && row.status !== 'done') { row.status = 'done'; row.updated = nowIso() }
+    // Only the worker who left spawn may mark it done; do not cancel a sibling still leaving.
+    if (row && row.status !== 'done' && row.status !== 'claimed') { row.status = 'done'; row.updated = nowIso() }
   }
 
   if (Object.keys(missing).length) upsertForage(board, 'gather-stock', { status: 'open', claimedBy: null, item: Object.keys(missing)[0], count: missing[Object.keys(missing)[0]] })
@@ -133,6 +148,8 @@ export function seedForageIfEmpty(bot, state) {
     const row = board.jobs.find((j) => j.id === 'gather-stock')
     if (row && row.status === 'open') { row.status = 'done'; row.updated = nowIso() }
   }
+  if (missing.logs) upsertForage(board, 'gather-wood', { status: 'open', claimedBy: null, item: 'logs', count: missing.logs })
+  if (missing.cobblestone) upsertForage(board, 'gather-cobble', { status: 'open', claimedBy: null, item: 'cobblestone', count: missing.cobblestone })
 
   if (extras.length && hasChest) upsertForage(board, 'deposit', { status: 'open', claimedBy: null })
   if (!campBuilt) upsertForage(board, 'place-camp', { status: 'open', claimedBy: null, schematic: 'camp' })
