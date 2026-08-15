@@ -39,6 +39,18 @@ P4 done (2026-08-15): skills/build.js consumes schematics/hut.json via prismarin
 P5: other-bot protocol (chat !commands, share coords, don't grief each other).
 P6 doing (2026-08-15): free play. skills/fun.js picks one short goal at a time (wander/gather/doodle/wood/hut/social) when chatMode is idle. !stay/!stop still freeze. Player !commands preempt. No auto-follow Har0x. Do not mark p9-hut done until a hut is actually placed.
 
+P7 doing (2026-08-15): official example skills. look.js from looker.js (fun/idle glance). guard.js from guard.js + mineflayer-pvp (self-defense; still flee creepers; never attack players/Har0x). sleep.js from sleeper.js (!sleep, night/thunder bed). chatterbox playerJoined hey, 60s cooldown. bloodhound skipped (did not install cleanly).
+
+## Next inspiration sources (do not implement all now)
+
+Steal these next, still plugin-first, still official/other-bot first — no homemade clones of things examples already do:
+
+- PrismarineJS/mineflayer examples: farmer.js, fisherman.js, chest.js, trader.js / villager_trading.js, blockfinder.js, inventory.js, jumper.js
+- PrismarineJS/mineflayer-pvp examples (already a dep)
+- Mindcraft chat / skill protocol (other bots ask Steve via !commands)
+- Voyager skill library (named skills + score, not their LLM keys)
+- Other people's bots on this server (Har0x / sibling Mineflayer bots): share !commands, don't grief each other
+
 ## What we are not doing
 
 - Not cloning Voyager/Mindcraft wholesale (wrong version, their LLM keys, LAN assumptions).

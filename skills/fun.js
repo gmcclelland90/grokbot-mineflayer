@@ -3,8 +3,10 @@ import { huntSand, huntBlock, leaveSpawnForGather } from './collect.js'
 import { punchTree } from './wood.js'
 import { placeAt } from './place.js'
 import { buildNamed, countBuildMaterials, hutSolidCount } from './build.js'
+import { lookAtNearest } from './look.js'
+import { goToSleep, wakeUp, shouldSleep, isNightOrThunder } from './sleep.js'
 
-const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build'])
+const BUSY = new Set(['stay', 'follow', 'come', 'collect', 'wood', 'craft', 'table', 'shovel', 'pick', 'place', 'build', 'sleep'])
 const DOODLE_ITEMS = ['dirt', 'grass_block', 'sand', 'red_sand', 'sandstone', 'cobblestone']
 const SOCIAL_CD_MS = 60000
 const SOCIAL_LINES = ['hi', 'hey', 'found dirt', 'looking around', 'nice spot']
@@ -101,6 +103,7 @@ function pickGoal(bot, state) {
   if (need > 0 && buildN >= need) pool.push('hut')
   const other = nearbyOther(bot, 12)
   if (other && Date.now() - (state.funSaidAt || 0) >= SOCIAL_CD_MS) pool.push('social')
+  if (shouldSleep(bot)) pool.push('sleep')
   const fresh = pool.filter((g) => !recent.includes(g))
   const use = fresh.length ? fresh : pool
   if (!state.funStarted) {
@@ -257,6 +260,10 @@ async function social(bot, state) {
 
 export async function funTick(bot, state) {
   if (preempted(state)) return false
+  lookAtNearest(bot)
+  if (bot.isSleeping && !isNightOrThunder(bot)) {
+    try { await wakeUp(bot, state) } catch {}
+  }
   if (bot.armorManager && typeof bot.armorManager.equipAll === 'function') {
     try { await bot.armorManager.equipAll() } catch {}
   }
@@ -270,6 +277,7 @@ export async function funTick(bot, state) {
     else if (goal === 'doodle') await doodle(bot, state)
     else if (goal === 'hut') await hutOnce(bot, state)
     else if (goal === 'social') await social(bot, state)
+    else if (goal === 'sleep') await goToSleep(bot, state)
   } catch (err) {
     plog('fun ' + goal + ' fail ' + (err && err.message))
   }

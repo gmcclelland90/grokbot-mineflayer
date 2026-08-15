@@ -33,6 +33,9 @@ export function parseLocalCmd(text) {
   if (core === 'pick' || core === 'pickaxe' || core === 'wooden pick' || core === 'wooden pickaxe' || core === 'wooden_pickaxe') return { cmd: 'pick' }
   if (core === 'hut' || core === 'house' || core === 'build hut') return { cmd: 'build', name: 'hut' }
   if (core === 'commands' || core === 'help') return { cmd: 'commands' }
+  if (core === 'sleep') return { cmd: 'sleep' }
+  if (core === 'guard off' || core === 'unguard') return { cmd: 'guard', on: false }
+  if (core === 'guard' || core === 'guard on') return { cmd: 'guard', on: true }
   const buildM = core.match(/^build(?:\s+([a-z0-9_]+))?$/)
   if (buildM) return { cmd: 'build', name: buildM[1] || 'hut' }
   if (/\b(hi|hey|hello)\b/.test(t)) return { cmd: 'hi' }

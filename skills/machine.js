@@ -4,6 +4,9 @@ import { huntSand, huntBlock, leaveSpawnForGather } from './collect.js'
 import { startFollow, comeNow } from './follow.js'
 import { idleTick } from './idle.js'
 import { nearestHostile, fleeHostile } from './flee.js'
+import { lookAtNearest } from './look.js'
+import { shouldGuard, runGuard, wireHurt, nearestCreeper, stopGuard } from './guard.js'
+import { runSleep } from './sleep.js'
 import { runCraft } from './craft.js'
 import { gatherWood } from './wood.js'
 import { placeHeld } from './place.js'
@@ -39,8 +42,12 @@ function wantBuild(state) {
   return state.chatMode === 'build'
 }
 
+function wantSleep(state) {
+  return state.chatMode === 'sleep'
+}
+
 function wantSkill(state) {
-  return wantWood(state) || wantCraft(state) || wantPlace(state) || wantBuild(state)
+  return wantWood(state) || wantCraft(state) || wantPlace(state) || wantBuild(state) || wantSleep(state)
 }
 
 function shouldCollect(state, bot) {
@@ -55,6 +62,14 @@ function hole(bot, state) {
 
 function hostile(bot, d = 8) {
   try { return nearestHostile(bot, d) } catch { return null }
+}
+
+function creeper(bot, d = 8) {
+  try { return nearestCreeper(bot, d) } catch { return null }
+}
+
+function guardNow(bot, state) {
+  try { return shouldGuard(bot, state) } catch { return false }
 }
 
 class SkillState {
@@ -98,7 +113,7 @@ async function runEscape(bot, ctx, still) {
 
 async function runFlee(bot, ctx, still) {
   while (still() && !ctx.state.dead) {
-    const mob = hostile(bot, 10)
+    const mob = creeper(bot, 10)
     if (!mob) return
     ctx.state.note = 'flee ' + String(mob.name || 'mob')
     await fleeHostile(bot, mob)
@@ -185,6 +200,10 @@ async function runBuild(bot, ctx, still) {
   if (state.chatMode === 'build') state.chatMode = null
 }
 
+async function runSleepSkill(bot, ctx, still) {
+  await runSleep(bot, ctx, still)
+}
+
 export function startStateMachine(bot, state) {
   const { StateTransition, BotStateMachine, NestedStateMachine, BehaviorIdle, BehaviorFollowEntity } = smApi(stateMachine)
   const ctx = { state, bot }
@@ -197,6 +216,12 @@ export function startStateMachine(bot, state) {
   const craft = new SkillState('craft', bot, ctx, runCraftSkill)
   const place = new SkillState('place', bot, ctx, runPlace)
   const build = new SkillState('build', bot, ctx, runBuild)
+  const sleepState = new SkillState('sleep', bot, ctx, runSleepSkill)
+  const guard = new SkillState('guard', bot, ctx, runGuard)
+
+  try { wireHurt(bot, state) } catch (err) { plog('guard wireHurt fail ' + (err && err.message)) }
+  try { lookAtNearest(bot) } catch {}
+  plog('look from looker.js; guard from guard.js+pvp; sleep from sleeper.js')
 
   const idle = new BehaviorIdle()
   idle.stateName = 'idle'
@@ -352,7 +377,7 @@ export function startStateMachine(bot, state) {
       parent: wood,
       child: idle,
       name: 'wood->idle',
-      shouldTransition: () => !wantWood(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantCraft(state) && !wantPlace(state) && !wantBuild(state),
+      shouldTransition: () => !wantWood(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantCraft(state) && !wantPlace(state) && !wantBuild(state) && !wantSleep(state),
       onTransition: () => plog('transition wood->idle')
     }),
     new StateTransition({
@@ -373,7 +398,7 @@ export function startStateMachine(bot, state) {
       parent: craft,
       child: idle,
       name: 'craft->idle',
-      shouldTransition: () => !wantCraft(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantPlace(state) && !wantBuild(state),
+      shouldTransition: () => !wantCraft(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantPlace(state) && !wantBuild(state) && !wantSleep(state),
       onTransition: () => plog('transition craft->idle')
     }),
     new StateTransition({
@@ -394,7 +419,7 @@ export function startStateMachine(bot, state) {
       parent: place,
       child: idle,
       name: 'place->idle',
-      shouldTransition: () => !wantPlace(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state) && !wantBuild(state),
+      shouldTransition: () => !wantPlace(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state) && !wantBuild(state) && !wantSleep(state),
       onTransition: () => plog('transition place->idle')
     }),
     new StateTransition({
@@ -458,7 +483,7 @@ export function startStateMachine(bot, state) {
       parent: build,
       child: idle,
       name: 'build->idle',
-      shouldTransition: () => !wantBuild(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state) && !wantPlace(state),
+      shouldTransition: () => !wantBuild(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state) && !wantPlace(state) && !wantSleep(state),
       onTransition: () => plog('transition build->idle')
     }),
     new StateTransition({
@@ -467,6 +492,77 @@ export function startStateMachine(bot, state) {
       name: 'build->collect',
       shouldTransition: () => !wantBuild(state) && !wantFollow(state) && shouldCollect(state, bot),
       onTransition: () => plog('transition build->collect')
+    }),
+
+    new StateTransition({
+      parent: idle,
+      child: sleepState,
+      name: 'idle->sleep',
+      shouldTransition: () => wantSleep(state),
+      onTransition: () => plog('transition idle->sleep')
+    }),
+    new StateTransition({
+      parent: collect,
+      child: sleepState,
+      name: 'collect->sleep',
+      shouldTransition: () => wantSleep(state),
+      onTransition: () => plog('transition collect->sleep')
+    }),
+    new StateTransition({
+      parent: follow,
+      child: sleepState,
+      name: 'follow->sleep',
+      shouldTransition: () => !wantFollow(state) && wantSleep(state),
+      onTransition: () => plog('transition follow->sleep')
+    }),
+    new StateTransition({
+      parent: wood,
+      child: sleepState,
+      name: 'wood->sleep',
+      shouldTransition: () => !wantWood(state) && wantSleep(state),
+      onTransition: () => plog('transition wood->sleep')
+    }),
+    new StateTransition({
+      parent: craft,
+      child: sleepState,
+      name: 'craft->sleep',
+      shouldTransition: () => !wantCraft(state) && wantSleep(state),
+      onTransition: () => plog('transition craft->sleep')
+    }),
+    new StateTransition({
+      parent: place,
+      child: sleepState,
+      name: 'place->sleep',
+      shouldTransition: () => !wantPlace(state) && wantSleep(state),
+      onTransition: () => plog('transition place->sleep')
+    }),
+    new StateTransition({
+      parent: build,
+      child: sleepState,
+      name: 'build->sleep',
+      shouldTransition: () => !wantBuild(state) && wantSleep(state),
+      onTransition: () => plog('transition build->sleep')
+    }),
+    new StateTransition({
+      parent: sleepState,
+      child: follow,
+      name: 'sleep->follow',
+      shouldTransition: () => wantFollow(state),
+      onTransition: () => plog('transition sleep->follow')
+    }),
+    new StateTransition({
+      parent: sleepState,
+      child: idle,
+      name: 'sleep->idle',
+      shouldTransition: () => !wantSleep(state) && !wantFollow(state) && !shouldCollect(state, bot) && !wantWood(state) && !wantCraft(state) && !wantPlace(state) && !wantBuild(state),
+      onTransition: () => plog('transition sleep->idle')
+    }),
+    new StateTransition({
+      parent: sleepState,
+      child: collect,
+      name: 'sleep->collect',
+      shouldTransition: () => !wantSleep(state) && !wantFollow(state) && shouldCollect(state, bot),
+      onTransition: () => plog('transition sleep->collect')
     })
 
   ]
@@ -486,21 +582,35 @@ export function startStateMachine(bot, state) {
       parent: work,
       child: flee,
       name: 'work->flee',
-      shouldTransition: () => !hole(bot, state) && !!hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !!creeper(bot, 8),
       onTransition: () => plog('transition work->flee')
+    }),
+    new StateTransition({
+      parent: work,
+      child: guard,
+      name: 'work->guard',
+      shouldTransition: () => !hole(bot, state) && !creeper(bot, 8) && guardNow(bot, state),
+      onTransition: () => plog('transition work->guard')
     }),
     new StateTransition({
       parent: escape,
       child: flee,
       name: 'escape->flee',
-      shouldTransition: () => !hole(bot, state) && !!hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !!creeper(bot, 8),
       onTransition: () => plog('transition escape->flee')
+    }),
+    new StateTransition({
+      parent: escape,
+      child: guard,
+      name: 'escape->guard',
+      shouldTransition: () => !hole(bot, state) && !creeper(bot, 8) && guardNow(bot, state),
+      onTransition: () => plog('transition escape->guard')
     }),
     new StateTransition({
       parent: escape,
       child: work,
       name: 'escape->work',
-      shouldTransition: () => !hole(bot, state) && !hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !creeper(bot, 8) && !guardNow(bot, state),
       onTransition: () => plog('transition escape->work')
     }),
     new StateTransition({
@@ -512,10 +622,38 @@ export function startStateMachine(bot, state) {
     }),
     new StateTransition({
       parent: flee,
+      child: guard,
+      name: 'flee->guard',
+      shouldTransition: () => !hole(bot, state) && !creeper(bot, 8) && guardNow(bot, state),
+      onTransition: () => plog('transition flee->guard')
+    }),
+    new StateTransition({
+      parent: flee,
       child: work,
       name: 'flee->work',
-      shouldTransition: () => !hole(bot, state) && !hostile(bot, 8),
+      shouldTransition: () => !hole(bot, state) && !creeper(bot, 8) && !guardNow(bot, state),
       onTransition: () => plog('transition flee->work')
+    }),
+    new StateTransition({
+      parent: guard,
+      child: escape,
+      name: 'guard->escape',
+      shouldTransition: () => hole(bot, state),
+      onTransition: () => { try { stopGuard(bot) } catch {}; plog('transition guard->escape') }
+    }),
+    new StateTransition({
+      parent: guard,
+      child: flee,
+      name: 'guard->flee',
+      shouldTransition: () => !hole(bot, state) && !!creeper(bot, 8),
+      onTransition: () => { try { stopGuard(bot) } catch {}; plog('transition guard->flee') }
+    }),
+    new StateTransition({
+      parent: guard,
+      child: work,
+      name: 'guard->work',
+      shouldTransition: () => !hole(bot, state) && !creeper(bot, 8) && !guardNow(bot, state),
+      onTransition: () => { try { stopGuard(bot) } catch {}; plog('transition guard->work') }
     })
   ]
 
@@ -538,6 +676,6 @@ export function startStateMachine(bot, state) {
 
   state.useMachine = true
   state.smState = 'work'
-  plog('state machine live nested=work(fun,follow,collect,wood,craft,place,build) root(escape,flee,work) no auto-follow')
+  plog('state machine live nested=work(fun,follow,collect,wood,craft,place,build,sleep) root(escape,flee,guard,work) looker+guard+sleeper no auto-follow')
   return machine
 }

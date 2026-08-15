@@ -1,5 +1,6 @@
 import { plog, sleep, posOf, countSand, countNamed, inventorySummary, horizFromOrigin, stopPath, clearMove } from './lib.js'
 import { funTick } from './fun.js'
+import { lookAtNearest } from './look.js'
 
 export async function idleTick(bot, state) {
   if (state.chatMode === 'stay') {
@@ -13,6 +14,7 @@ export async function idleTick(bot, state) {
     stopPath(bot)
     try { bot.setControlState('jump', false) } catch {}
     await clearMove(bot)
+    lookAtNearest(bot)
     if (bot.armorManager && typeof bot.armorManager.equipAll === 'function') {
       try { await bot.armorManager.equipAll() } catch {}
     }
@@ -23,6 +25,7 @@ export async function idleTick(bot, state) {
     await sleep(300)
     return
   }
+  lookAtNearest(bot)
   return funTick(bot, state)
 }
 

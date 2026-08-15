@@ -10,6 +10,7 @@ import { honorFollow } from './skills/follow.js'
 import { idleTick } from './skills/idle.js'
 import { startStateMachine } from './skills/machine.js'
 import { parseLocalCmd as parseMindCmd, cmdName, sayHungry } from './skills/commands.js'
+import { wireChatter } from './skills/chatter.js'
 
 const { goals } = pathfinderPkg
 const Vec3 = Vec3Import.Vec3 || Vec3Import
@@ -2235,7 +2236,9 @@ export function startPlayLoop(bot) {
     placeName: null,
     buildName: null,
     useMachine: false,
-    smState: ''
+    smState: '',
+    guardOn: true,
+    lastJoinHeyAt: 0
   }
 
   const chat = (msg) => {
@@ -2271,7 +2274,7 @@ export function startPlayLoop(bot) {
       return
     }
     if (name === 'commands' || name === 'help') {
-      const line = 'come follow stop collect wood craft place table shovel pick hungry build hut'
+      const line = 'come follow stop collect wood craft place table shovel pick hungry build hut sleep guard'
       try { bot.chat(line) } catch {}
       plog('commands-live ' + line)
       return
@@ -2391,6 +2394,27 @@ export function startPlayLoop(bot) {
       writeStatus(bot, Object.assign({}, state, { phase: name, note: 'chat ' + name + ' ' + item }))
       return
     }
+    if (name === 'sleep') {
+      state.chatMode = 'sleep'
+      state.chatUser = parsedUser || ''
+      state.chatExtra = extra || null
+      stopPath(bot)
+      chat('ok')
+      plog('chat cmd sleep from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { phase: 'sleep', note: 'chat sleep' }))
+      return
+    }
+    if (name === 'guard') {
+      const on = !(cmd && cmd.on === false) && !(extra && extra.on === false)
+      state.guardOn = on
+      if (!on) {
+        try { if (bot.pvp && typeof bot.pvp.stop === 'function') bot.pvp.stop() } catch {}
+      }
+      chat('ok')
+      plog('chat cmd guard ' + (on ? 'on' : 'off') + ' from ' + (parsedUser || '?'))
+      writeStatus(bot, Object.assign({}, state, { note: 'guard ' + (on ? 'on' : 'off') }))
+      return
+    }
     if (name === 'say') {
       const text = extra && extra.text != null ? String(extra.text).trim() : ''
       if (text && text.length <= 40) {
@@ -2445,7 +2469,8 @@ export function startPlayLoop(bot) {
     } catch (err) { plog('messagestr handler fail ' + (err && err.message)) }
   })
   plog('chat listener on (chat/whisper/messagestr) log=' + CHAT_LOG)
-  plog('commands-live come follow stop collect wood craft place table shovel pick hungry build hut')
+  try { wireChatter(bot, state) } catch (err) { plog('chatter wire fail ' + (err && err.message)) }
+  plog('commands-live come follow stop collect wood craft place table shovel pick hungry build hut sleep guard')
 
   const cmdPoll = setInterval(() => {
     try {
@@ -2456,9 +2481,9 @@ export function startPlayLoop(bot) {
       const obj = JSON.parse(raw)
       const action = String(obj.action || '').toLowerCase()
       plog('command.json action=' + action)
-      if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry' || action === 'craft' || action === 'wood' || action === 'place' || action === 'table' || action === 'shovel' || action === 'pick' || action === 'build' || action === 'hut' || action === 'commands' || action === 'help') {
+      if (action === 'follow' || action === 'come' || action === 'stop' || action === 'stay' || action === 'say' || action === 'collect' || action === 'hungry' || action === 'craft' || action === 'wood' || action === 'place' || action === 'table' || action === 'shovel' || action === 'pick' || action === 'build' || action === 'hut' || action === 'commands' || action === 'help' || action === 'sleep' || action === 'guard') {
         const mapped = action === 'stop' ? 'stay' : action
-        applyChatCmd({ cmd: mapped, block: obj.block || obj.item, item: obj.item || obj.block, user: obj.user, text: obj.text, name: obj.name || obj.block }, obj.user || state.chatUser || 'har0x', obj)
+        applyChatCmd({ cmd: mapped, block: obj.block || obj.item, item: obj.item || obj.block, user: obj.user, text: obj.text, name: obj.name || obj.block, on: obj.on }, obj.user || state.chatUser || 'har0x', obj)
       }
     } catch (err) {
       plog('command.json fail ' + (err && err.message))
@@ -2560,7 +2585,7 @@ export function startPlayLoop(bot) {
       await sleep(600)
       try {
         startStateMachine(bot, state)
-        plog('commands live !come !follow !stop !stay !collect [block] !hungry !craft [item] !wood !place !table !shovel !pick !build [name] !hut (bang optional; over here=come)')
+        plog('commands live !come !follow !stop !stay !collect [block] !hungry !craft [item] !wood !place !table !shovel !pick !build [name] !hut !sleep !guard on/off (bang optional; over here=come)')
       } catch (err) {
         state.useMachine = false
         plog('state machine start fail ' + (err && err.message))
