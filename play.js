@@ -341,6 +341,7 @@ function startFollow(bot, entity, range = FOLLOW_RANGE) {
 }
 
 function stopPath(bot) {
+  try { if (bot.collectBlock && typeof bot.collectBlock.cancelTask === 'function') bot.collectBlock.cancelTask() } catch {}
   try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
 }
 
@@ -595,45 +596,15 @@ async function digBlockNow(bot, block) {
     plog('skip forbidden ' + (block.name || '?'))
     return false
   }
+  if (Math.hypot(block.position.x, block.position.z) < SPAWN_SAFE_R) {
+    plog('skip collect inside spawn ' + block.name)
+    return false
+  }
   digBusy = true
   try {
     const before = countGatherInv(bot)
-    const close = await approachForDig(bot, block)
-    if (!close) return false
-    try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
-    await clearMove(bot)
-    const target = block.position.offset(0.5, 0.5, 0.5)
-    const pos = bot.entity && bot.entity.position
-    if (!pos || pos.distanceTo(target) > DIG_REACH) {
-      plog('abort dig, not in reach')
-      return false
-    }
-    try { await bot.lookAt(target, true) } catch {}
-    await sleep(100)
-    const fresh = bot.blockAt(block.position)
-    if (!fresh || !fresh.name || fresh.name === 'air' || fresh.name === 'cave_air' || fresh.name === 'void_air') return false
-    if (isPlayerBuilt(fresh) || !isGatherBlock(fresh) || !GATHER_NAMES.has(bareName(fresh.name))) {
-      plog('skip ' + fresh.name + ' (not allowed gather)')
-      return false
-    }
-    plog('dig ' + fresh.name + ' at ' + fresh.position.x + ' ' + fresh.position.y + ' ' + fresh.position.z + ' d=' + pos.distanceTo(target).toFixed(1) + ' inv=' + before)
-    let finished = false
-    const digP = bot.dig(fresh).finally(() => { finished = true })
-    const t = sleep(12000).then(() => {
-      if (!finished) {
-        try { bot.stopDigging() } catch {}
-        throw new Error('dig-timeout')
-      }
-    })
-    await Promise.race([digP, t])
-    await sleep(200)
-    await pickupAfterDig(bot, fresh.position, before)
-    return true
-  } catch (err) {
-    plog('dig fail ' + (err && err.message))
-    try { bot.stopDigging() } catch {}
-    await clearMove(bot)
-    return false
+    const ok = await collectViaPlugin(bot, block, 'gather-legacy')
+    return ok || countGatherInv(bot) > before
   } finally {
     digBusy = false
   }
@@ -672,45 +643,13 @@ async function scoopItems(bot) {
 }
 
 async function pickupAfterDig(bot, dropPos, beforeCount) {
-  const deadline = Date.now() + 2000
-  const item = nearestItemEntity(bot, 4.5)
-  if (item && bot.collectBlock && typeof bot.collectBlock.collect === 'function') {
-    try {
-      plog('collectBlock item d=' + bot.entity.position.distanceTo(item.position).toFixed(1))
-      const p = bot.collectBlock.collect(item)
-      const t = sleep(1800).then(() => { try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}; throw new Error('collect-timeout') })
-      await Promise.race([p, t])
-    } catch (err) {
-      const msg = err && err.message
-      if (msg && msg !== 'collect-timeout') plog('collectBlock fail ' + msg)
-      try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
-    }
+  const item = nearestItemEntity(bot, 6)
+  if (item && item.position && Math.hypot(item.position.x, item.position.z) >= SPAWN_SAFE_R) {
+    await collectViaPlugin(bot, item, 'pickup-item', 8000)
   }
   if (countGatherInv(bot) > beforeCount) {
     plog('picked up inv=' + countGatherInv(bot) + ' items=' + inventorySummary(bot))
     return true
-  }
-  const dest = item ? item.position : (dropPos ? dropPos.offset(0.5, 0, 0.5) : null)
-  if (dest) {
-    plog('walk onto drop ' + dest.x.toFixed(1) + ' ' + dest.y.toFixed(1) + ' ' + dest.z.toFixed(1))
-    await safeGoto(bot, dest.x, dest.y, dest.z, 0.8, Math.max(400, deadline - Date.now()))
-  } else {
-    await scoopItems(bot)
-  }
-  while (Date.now() < deadline) {
-    if (countGatherInv(bot) > beforeCount) {
-      plog('picked up inv=' + countGatherInv(bot) + ' items=' + inventorySummary(bot))
-      return true
-    }
-    const again = nearestItemEntity(bot, 3)
-    if (again && bot.entity && again.position.distanceTo(bot.entity.position) > 0.9) {
-      try { await bot.lookAt(again.position, true) } catch {}
-      try { bot.setControlState('forward', true) } catch {}
-      await sleep(150)
-      await clearMove(bot)
-    } else {
-      await sleep(100)
-    }
   }
   plog('pickup timeout before=' + beforeCount + ' after=' + countGatherInv(bot) + ' items=' + inventorySummary(bot))
   return countGatherInv(bot) > beforeCount
@@ -980,37 +919,21 @@ function foodPassReady(bot, state, ateUp) {
 }
 
 async function pickupNearbyFood(bot) {
-  const drop = nearestFoodDrop(bot, 8)
+  const drop = nearestFoodDrop(bot, 14)
   if (!drop) return countFood(bot) > 0
   if (Math.hypot(drop.position.x, drop.position.z) < SPAWN_SAFE_R) return false
   const n = droppedItemName(bot, drop) || 'item'
-  plog('food walk onto ' + n + ' d=' + bot.entity.position.distanceTo(drop.position).toFixed(1))
-  await walkNoJump(bot, drop.position.x, drop.position.z, 600)
-  await sleep(250)
+  plog('food collect() item ' + n + ' d=' + bot.entity.position.distanceTo(drop.position).toFixed(1))
+  await collectViaPlugin(bot, drop, 'food-item', 10000)
   return countFood(bot) > 0
 }
 
 async function harvestBerries(bot, block) {
   if (!block || !block.position) return false
   if (Math.hypot(block.position.x, block.position.z) < SPAWN_SAFE_R) return false
-  const dest = block.position.offset(0.5, 0.5, 0.5)
-  let pos = bot.entity && bot.entity.position
-  if (!pos) return false
-  if (pos.distanceTo(dest) > 3.2) {
-    plog('food walk berry ' + block.position.x + ' ' + block.position.y + ' ' + block.position.z)
-    await walkNoJump(bot, dest.x, dest.z, 700)
-  }
-  if (horizFromOrigin(bot) < SPAWN_SAFE_R) return false
-  pos = bot.entity.position
-  if (pos.distanceTo(dest) > 3.5) return false
-  try { await bot.lookAt(dest, true) } catch {}
-  try {
-    await bot.activateBlock(block)
-    plog('food harvest berry at ' + block.position.x + ' ' + block.position.y + ' ' + block.position.z)
-  } catch (err) {
-    plog('food berry fail ' + (err && err.message))
-  }
-  await sleep(350)
+  plog('food collect() berry ' + block.position.x + ' ' + block.position.y + ' ' + block.position.z)
+  await collectViaPlugin(bot, block, 'food-berry', 12000)
+  if (countFood(bot) > 0) return true
   return pickupNearbyFood(bot)
 }
 
@@ -1157,6 +1080,81 @@ function applyNoJumpMovements(bot) {
     plog('simple movements: no parkour no jump maxDropDown=1')
   } catch (err) {
     plog('simple movements fail ' + (err && err.message))
+  }
+}
+
+function applyCollectMovements(bot) {
+  try {
+    const Movements = pathfinderPkg.Movements
+    if (!Movements || !bot.pathfinder) return
+    const mv = new Movements(bot)
+    mv.canDig = true
+    mv.allow1by1towers = false
+    mv.allowParkour = false
+    mv.allowSprinting = false
+    mv.maxDropDown = 1
+    mv.scafoldingBlocks = []
+    try {
+      const names = bot.registry && bot.registry.blocksByName
+      if (names) {
+        for (const key of Object.keys(names)) {
+          const rec = names[key]
+          if (!rec || rec.id == null) continue
+          const fake = { name: key }
+          if (isPlayerBuilt(fake) || String(key).includes('planks') || String(key).includes('oak')) {
+            mv.blocksCantBreak.add(rec.id)
+          }
+        }
+      }
+    } catch {}
+    if (bot.collectBlock) {
+      bot.collectBlock.movements = mv
+      bot.collectBlock.chestLocations = []
+      bot.collectBlock.itemFilter = () => false
+    }
+    bot.pathfinder.setMovements(mv)
+  } catch (err) {
+    plog('collect movements fail ' + (err && err.message))
+  }
+}
+
+async function collectViaPlugin(bot, target, label, ms = 15000) {
+  if (!target) return false
+  if (!bot.collectBlock || typeof bot.collectBlock.collect !== 'function') {
+    plog('collect() missing plugin')
+    return false
+  }
+  const pos = target.position
+  if (pos && Math.hypot(pos.x, pos.z) < SPAWN_SAFE_R) {
+    plog('collect() skip spawn r<' + SPAWN_SAFE_R + ' ' + label)
+    return false
+  }
+  if (target.name && (isPlayerBuilt(target) || String(target.name).includes('planks'))) {
+    plog('collect() skip player-built ' + target.name)
+    return false
+  }
+  applyCollectMovements(bot)
+  const kind = target.name || (target.displayName && String(target.displayName)) || 'target'
+  plog('collect() ' + label + ' ' + kind + (pos ? (' at ' + pos.x + ' ' + pos.y + ' ' + pos.z) : ''))
+  try {
+    const p = bot.collectBlock.collect(target)
+    const t = sleep(ms).then(() => {
+      try { if (bot.collectBlock && typeof bot.collectBlock.cancelTask === 'function') bot.collectBlock.cancelTask() } catch {}
+      try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
+      throw new Error('collect-timeout')
+    })
+    await Promise.race([p, t])
+    plog('collect() done ' + label + ' inv=' + inventorySummary(bot))
+    return true
+  } catch (err) {
+    const msg = err && err.message
+    if (msg === 'collect-timeout') plog('collect() timeout ' + label)
+    else if (msg) plog('collect() fail ' + label + ' ' + msg)
+    try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
+    return false
+  } finally {
+    applyNoJumpMovements(bot)
+    try { bot.setControlState('jump', false) } catch {}
   }
 }
 
@@ -1489,44 +1487,12 @@ function findSolidStandNear(bot, block) {
   return best
 }
 
-async function simpleWaitPickup(bot, dropPos, before, ms = 3000) {
-  const deadline = Date.now() + ms
-  const item = nearestItemEntity(bot, 4.5)
-  if (item && bot.collectBlock && typeof bot.collectBlock.collect === 'function') {
-    try {
-      plog('simple collectBlock d=' + bot.entity.position.distanceTo(item.position).toFixed(1))
-      const p = bot.collectBlock.collect(item)
-      const t = sleep(1500).then(() => { try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}; throw new Error('collect-timeout') })
-      await Promise.race([p, t])
-    } catch (err) {
-      const msg = err && err.message
-      if (msg && msg !== 'collect-timeout') plog('simple collect fail ' + msg)
-      try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
-    }
+async function simpleWaitPickup(bot, dropPos, before, ms = 8000) {
+  const item = nearestItemEntity(bot, 6)
+  if (item && item.position && Math.hypot(item.position.x, item.position.z) >= SPAWN_SAFE_R) {
+    await collectViaPlugin(bot, item, 'simple-item', ms)
   }
-  const got = () => countSandDirt(bot) > before
-  if (got()) return true
-  const dest = item ? item.position : (dropPos ? dropPos.offset(0.5, 0, 0.5) : null)
-  if (dest) {
-    plog('simple walk onto drop ' + dest.x.toFixed(1) + ' ' + dest.y.toFixed(1) + ' ' + dest.z.toFixed(1))
-    await walkNoJump(bot, dest.x, dest.z, 500)
-  }
-  while (Date.now() < deadline) {
-    if (got()) return true
-    const again = nearestItemEntity(bot, 3)
-    if (again && bot.entity && again.position.distanceTo(bot.entity.position) > 0.8) {
-      try { await bot.lookAt(again.position, true) } catch {}
-      try {
-        bot.setControlState('jump', false)
-        bot.setControlState('forward', true)
-      } catch {}
-      await sleep(180)
-      await clearMove(bot)
-    } else {
-      await sleep(120)
-    }
-  }
-  return got()
+  return countSandDirt(bot) > before
 }
 
 async function simpleGetOne(bot, state) {
@@ -1558,10 +1524,10 @@ async function simpleGetOne(bot, state) {
   plog('gather start sand=' + sand0 + ' dirt=' + dirt0 + ' have=' + before + '/' + GATHER_TARGET + ' r=' + rNow.toFixed(1) + ' pos=' + (posOf(bot) && posOf(bot).str))
   writeStatus(bot, Object.assign({}, state, { note: 'gather sand=' + sand0 + ' dirt=' + dirt0 + ' have=' + before + '/' + GATHER_TARGET + ' r=' + rNow.toFixed(1), phase: 'gather' }))
 
-  const existing = nearestItemEntity(bot, 5)
-  if (existing) {
-    plog('gather existing drop d=' + bot.entity.position.distanceTo(existing.position).toFixed(1))
-    const ok = await simpleWaitPickup(bot, existing.position, before, 3000)
+  const existing = nearestItemEntity(bot, 8)
+  if (existing && existing.position && Math.hypot(existing.position.x, existing.position.z) >= SPAWN_SAFE_R) {
+    plog('gather existing drop via collect() d=' + bot.entity.position.distanceTo(existing.position).toFixed(1))
+    const ok = await simpleWaitPickup(bot, existing.position, before, 8000)
     if (ok) {
       const sand = countSand(bot)
       const dirt = countNamed(bot, ['dirt', 'grass_block'])
@@ -1607,70 +1573,16 @@ async function simpleGetOne(bot, state) {
     return
   }
 
-  const dest = block.position.offset(0.5, 0.5, 0.5)
-  let pos = bot.entity.position
-  let d = pos.distanceTo(dest)
-  plog('gather target ' + block.name + ' at ' + block.position.x + ' ' + block.position.y + ' ' + block.position.z + ' d=' + d.toFixed(1))
-
-  if (d > 3) {
-    const stand = findSolidStandNear(bot, block)
-    if (stand && Math.hypot(stand.x, stand.z) >= SPAWN_SAFE_R) {
-      plog('gather walk to stand ' + stand.x.toFixed(1) + ' ' + stand.y.toFixed(1) + ' ' + stand.z.toFixed(1))
-      await walkNoJump(bot, stand.x, stand.z, 900)
-    } else {
-      await walkNoJump(bot, dest.x, dest.z, 900)
-    }
-    pos = bot.entity.position
-    d = pos.distanceTo(dest)
-    if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
-      plog('gather abort, walked inside spawn')
-      await leaveSpawnIfNeeded(bot, state)
-      return
-    }
-  }
-
-  if (!isSolidStandFloor(feetBlock(bot, -1))) {
-    plog('gather abort, floor=' + (feetBlock(bot, -1) && feetBlock(bot, -1).name))
-    return
-  }
-  if (d > 3.2) {
-    plog('gather still far d=' + d.toFixed(1) + ' no dig')
-    return
-  }
   if (digBusy || bot.targetDigBlock) {
-    plog('gather skip, dig busy')
+    plog('gather skip, collect busy')
     return
   }
 
   digBusy = true
   try {
-    try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
-    await clearMove(bot)
-    try { bot.setControlState('jump', false) } catch {}
-    try { await bot.lookAt(dest, true) } catch {}
-    await sleep(120)
-    const fresh = bot.blockAt(block.position)
-    if (!fresh || refuseSimpleDig(fresh)) {
-      plog('gather abort fresh ' + (fresh && fresh.name))
-      return
-    }
-    if (fresh.position && Math.hypot(fresh.position.x, fresh.position.z) < SPAWN_SAFE_R) {
-      plog('gather abort fresh inside spawn')
-      return
-    }
     const invBefore = countSandDirt(bot)
-    plog('gather DIG ' + fresh.name + ' at ' + fresh.position.x + ' ' + fresh.position.y + ' ' + fresh.position.z + ' d=' + bot.entity.position.distanceTo(dest).toFixed(1) + ' have=' + invBefore + '/' + GATHER_TARGET)
-    let finished = false
-    const digP = bot.dig(fresh).finally(() => { finished = true })
-    const t = sleep(8000).then(() => {
-      if (!finished) {
-        try { bot.stopDigging() } catch {}
-        throw new Error('dig-timeout')
-      }
-    })
-    await Promise.race([digP, t])
-    await sleep(150)
-    const ok = await simpleWaitPickup(bot, fresh.position, invBefore, 3000)
+    plog('gather collect() ' + block.name + ' at ' + block.position.x + ' ' + block.position.y + ' ' + block.position.z + ' have=' + invBefore + '/' + GATHER_TARGET)
+    const ok = await collectViaPlugin(bot, block, 'gather-block', 15000)
     const sand = countSand(bot)
     const dirt = countNamed(bot, ['dirt', 'grass_block'])
     const have = sand + dirt
@@ -1681,15 +1593,16 @@ async function simpleGetOne(bot, state) {
         phase: have >= GATHER_TARGET ? 'hold' : 'gather'
       }))
     } else {
-      plog('gather pickup fail sand=' + sand + ' dirt=' + dirt + ' items=' + inventorySummary(bot))
-      writeStatus(bot, Object.assign({}, state, { note: 'gather pickup fail sand=' + sand + ' dirt=' + dirt, phase: 'gather' }))
+      plog('gather collect no inv change sand=' + sand + ' dirt=' + dirt + ' items=' + inventorySummary(bot))
+      writeStatus(bot, Object.assign({}, state, { note: 'gather collect no inv change sand=' + sand + ' dirt=' + dirt, phase: 'gather' }))
     }
   } catch (err) {
-    plog('gather dig fail ' + (err && err.message))
-    try { bot.stopDigging() } catch {}
+    plog('gather collect fail ' + (err && err.message))
+    try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
     await clearMove(bot)
   } finally {
     digBusy = false
+    applyNoJumpMovements(bot)
     try { bot.setControlState('jump', false) } catch {}
   }
 }
@@ -2307,7 +2220,15 @@ export function startPlayLoop(bot) {
 
   ;(async () => {
     try {
-      plog('loop start pid=' + process.pid + ' mode=p4-food')
+      plog('loop start pid=' + process.pid + ' mode=p4-food collectBlock=' + (bot.collectBlock && typeof bot.collectBlock.collect === 'function' ? 'ready' : 'MISSING'))
+      try {
+        if (bot.collectBlock) {
+          bot.collectBlock.chestLocations = []
+          bot.collectBlock.itemFilter = () => false
+        }
+      } catch {}
+      applyNoJumpMovements(bot)
+      applyCollectMovements(bot)
       applyNoJumpMovements(bot)
       try {
         if (bot.autoEat && typeof bot.autoEat.setOpts === 'function') {

@@ -1,6 +1,6 @@
 {
   "current": "p4-food",
-  "updated": "2026-08-15T01:33:56Z",
+  "updated": "2026-08-15T01:45:00Z",
   "loop": "attempt current skill -> score episode -> mark pass/fail -> stay or advance",
   "skills": [
     {
@@ -41,9 +41,9 @@
       "deps": [
         "p2-hold-one"
       ],
-      "attempts": 1,
+      "attempts": 2,
       "last_score": null,
-      "note": "attempt 1 fail: pid=514937 pos=25.35 100.00 24.35 r=35.1 dirt=9 food_inv=0 bar=19 deaths=0; no berries/mobs/drops in 16m, wander stuck local, 2026-08-15 11:22 AEST"
+      "note": "attempt 2: collectblock wired (collect() on food item/berry; kill+collect drop still ok). pid=560984 pos=25.31 100.00 24.50 r=35.2 dirt=9 food_inv=0 bar=19 deaths=0; collect() not called in first 45s (no food target in 16m), wander stuck local, 2026-08-15 11:44 AEST. USE collectblock, stop homemade dig."
     },
     {
       "id": "p5-sand",
@@ -180,7 +180,7 @@
       ],
       "attempts": 1,
       "last_score": null,
-      "note": "listener live pid=540063; logs rl/chat.jsonl; local come/follow/stop; pending for LLM; food+9 dirt kept, 2026-08-15 11:33 AEST"
+      "note": "listener live pid=560984; hey/come/follow/stop kept after collectblock patch; food+9 dirt kept, 2026-08-15 11:44 AEST"
     }
   ]
 }

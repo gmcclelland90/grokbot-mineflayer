@@ -146,3 +146,12 @@ Do not delete this heading. After the next process start, each event appends one
 - hi/hey/hello (word match on disk; live process is exact+spawn) replies "hey" once per 20s. Spawn said hey. Har0x "oh hey" / "where are you?" logged. command.json said hey then here.
 - Restarted ONCE via start-logged.sh. pid=540063 spawned 25.30 100.00 24.67 r=35.3 dirt=9 phase=food food_inv=0 bar=19 deaths=0. Food hunt kept. No house machine. No second restart.
 - Disk parseLocalCmd now matches (hi|hey|hello) so "oh hey" will greet after next natural restart. Do not restart just for that.
+- [2026-08-15T01:43:46.905Z] episode end score=74.39 sand=0 dirt=9 sandstone=0 house=no grief=0 653.9s pos=26.49 101.00 24.50 deaths=0 score=74.39
+
+## Use collectblock, stop homemade dig (2026-08-15 11:44 AM AEST / 01:44 UTC)
+- Glenn: stop reinventing walk+dig+pickup. mineflayer-collectblock was already installed and loaded in index.js (`bot.loadPlugin`).
+- play.js gather / food / simple-dig now call `bot.collectBlock.collect(block|item)` (official collectblock.js pattern). Homemade `bot.dig` + walk-onto-drop removed from those paths.
+- Still skip oak_planks / player builds. Still no collect/dig inside spawn r<24. Dirt kept. Chat hey/come/follow/stop kept.
+- collectBlock.chestLocations=[] and itemFilter never-deposit so dirt is not dumped in a village chest. After collect(), restore no-jump movements.
+- Restarted ONCE via start-logged.sh. pid=560984 spawned 26.49 101.00 24.50 r=36.1 dirt=9. Said hey once. collectBlock=ready.
+- Watched ~45s: collect() was NOT called. dirt already >=8 so gather path idle; food hunt found no item/berry/mob in 14-16m, local wander stuck at 25.31 100.00 24.50 r=35.2 food_inv=0 bar=19 deaths=0. Left running. No second restart.
