@@ -15,10 +15,10 @@ Climb in order. Do not skip to house. Stay outside spawn (r>=24) for any gather/
 11. Flee a hostile and live
 12. Punch a tree, craft a plank, craft a crafting table — DOING (wood.js+craft.js wired; no logs in inv yet)
 13. Wooden pick / shovel
-14. Free play: wander, gather, build, stay alive
+14. Free play: wander, gather, build, stay alive — DOING (fun.js; !stay still freezes)
 15. Interact with other players and Mineflayer bots (chat, follow, not grief)
 16. Chat listen: hi/hey/hello -> hey; come/follow/stop; !craft !wood !place !table !shovel !pick !build !hut — DOING
 
 Rules: one step at a time. Restart only when the live brain cannot do the current step. Chat: greet hey (20s), come/follow/stop, short say; else mute except house up.
 
-Live graph: `matrix.json`. Cycle + pass criteria: `LOOP.md`. Current: p5-sand (p4-food done; p12-wood skill wired). Keep-alive updates the matrix; do not skip the house (p6-p9).
+Live graph: `matrix.json`. Cycle + pass criteria: `LOOP.md`. Current: p5-sand + p12-wood + P6/p14 free play (fun.js). Do not mark p9-hut done until a hut is placed.

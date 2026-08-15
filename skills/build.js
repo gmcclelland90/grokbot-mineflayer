@@ -53,6 +53,23 @@ function countBuildInv(bot) {
   return n
 }
 
+export function countBuildMaterials(bot) {
+  return countBuildInv(bot)
+}
+
+let _hutSolids = 0
+export function hutSolidCount() {
+  if (_hutSolids) return _hutSolids
+  try {
+    const jsonPath = path.join(SCHEM_DIR, 'hut.json')
+    if (fs.existsSync(jsonPath)) {
+      const j = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
+      _hutSolids = (j.blocks || []).filter((x) => x !== 0).length
+    }
+  } catch {}
+  return _hutSolids
+}
+
 function pickBuildItem(bot) {
   return findItemByNames(bot, BUILD_ITEMS)
 }
@@ -163,7 +180,8 @@ export async function buildNamed(bot, state, name) {
   let skipped = 0
   let missing = 0
   for (const cell of solids) {
-    if (state.dead || state.chatMode !== 'build') break
+    if (state.dead) break
+    if (state.chatMode && state.chatMode !== 'build') break
     const x = origin.x + cell.pos.x
     const y = origin.y + cell.pos.y
     const z = origin.z + cell.pos.z

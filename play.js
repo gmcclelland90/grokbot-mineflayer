@@ -2629,21 +2629,12 @@ export function startPlayLoop(bot) {
           continue
         }
 
-        const sandNow = countSand(bot)
-        const dirtNow = countNamed(bot, ['dirt', 'grass_block'])
-        const have = sandNow + dirtNow
         const rNow = horizFromOrigin(bot)
         const followingHarox = state.chatMode === 'follow' || state.chatMode === 'come'
 
         if (rNow < SPAWN_SAFE_R && !followingHarox) {
           state.phase = 'leave-spawn'
           await leaveSpawnIfNeeded(bot, state)
-          continue
-        }
-
-        if (sandNow < 1) {
-          await huntSand(bot, state)
-          writeStatus(bot, state)
           continue
         }
 

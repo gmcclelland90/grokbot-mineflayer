@@ -8,7 +8,7 @@ import { runCraft } from './craft.js'
 import { gatherWood } from './wood.js'
 import { placeHeld } from './place.js'
 import { buildNamed } from './build.js'
-import { plog, sleep, stopPath, findPlayerNamed, horizFromOrigin, countSand, SPAWN_SAFE_R } from './lib.js'
+import { plog, sleep, stopPath, findPlayerNamed, horizFromOrigin, SPAWN_SAFE_R } from './lib.js'
 
 function smApi(mod) {
   const m = (mod && mod.BotStateMachine) ? mod : (mod && mod.default) ? mod.default : mod
@@ -46,9 +46,7 @@ function wantSkill(state) {
 function shouldCollect(state, bot) {
   if (state.chatMode === 'stay' || state.chatMode === 'follow' || state.chatMode === 'come') return false
   if (wantSkill(state)) return false
-  if (state.chatMode === 'collect') return true
-  try { if (countSand(bot) < 1) return true } catch {}
-  return false
+  return state.chatMode === 'collect'
 }
 
 function hole(bot, state) {
@@ -203,10 +201,11 @@ export function startStateMachine(bot, state) {
   const idle = new BehaviorIdle()
   idle.stateName = 'idle'
   idle.onStateEntered = function () {
-    ctx.state.phase = 'idle'
-    ctx.state.smState = 'idle'
-    ctx.state.note = 'sm idle'
-    plog('state enter idle')
+    const stay = ctx.state.chatMode === 'stay'
+    ctx.state.phase = stay ? 'idle' : 'fun'
+    ctx.state.smState = stay ? 'idle' : 'fun'
+    ctx.state.note = stay ? 'sm idle stay' : 'sm fun'
+    plog('state enter ' + (stay ? 'idle stay' : 'fun'))
     const gen = (idle._gen = (idle._gen || 0) + 1)
     runIdle(bot, ctx, () => idle.active && idle._gen === gen).catch((err) => plog('state idle fail ' + (err && err.message)))
   }
@@ -539,6 +538,6 @@ export function startStateMachine(bot, state) {
 
   state.useMachine = true
   state.smState = 'work'
-  plog('state machine live nested=work(idle,follow,collect,wood,craft,place,build) root(escape,flee,work) no auto-follow')
+  plog('state machine live nested=work(fun,follow,collect,wood,craft,place,build) root(escape,flee,work) no auto-follow')
   return machine
 }

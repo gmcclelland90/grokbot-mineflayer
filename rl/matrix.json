@@ -1,6 +1,6 @@
 {
   "current": "p5-sand",
-  "updated": "2026-08-15T02:50:00Z",
+  "updated": "2026-08-15T03:00:00Z",
   "loop": "attempt current skill -> score episode -> mark pass/fail -> stay or advance",
   "skills": [
     {
@@ -99,7 +99,7 @@
       ],
       "attempts": 0,
       "last_score": null,
-      "note": "build.js + schematics/hut.json wired (!build !hut); not done until Steve places a hut"
+      "note": "build.js + schematics/hut.json wired (!build !hut); fun may hut only if inv has enough blocks; not done until Steve places a hut"
     },
     {
       "id": "p10-follow",
@@ -148,16 +148,16 @@
     {
       "id": "p14-play",
       "name": "Free play self-sufficient",
-      "status": "todo",
+      "status": "doing",
       "deps": [
         "p9-hut",
         "p4-food",
         "p11-flee",
         "p13-shovel"
       ],
-      "attempts": 0,
+      "attempts": 1,
       "last_score": null,
-      "note": ""
+      "note": "P6 free play: skills/fun.js rotates wander/collect/wood/doodle/hut/social when idle; !stay still stands still; hut not auto-marked; 2026-08-15 13:00 AEST"
     },
     {
       "id": "p15-others",

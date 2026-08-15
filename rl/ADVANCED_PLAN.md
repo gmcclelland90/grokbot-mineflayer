@@ -37,7 +37,7 @@ P3 done (2026-08-15): skills/food.js wood.js craft.js place.js. SM states wood/c
     !craft [item] !wood !place !table !shovel !pick. Matrix climb p5-sand + p12-wood; do not skip hut.
 P4 done (2026-08-15): skills/build.js consumes schematics/hut.json via prismarine-schematic + placeAt. !build [name] !hut. SM build state. Do not mark matrix p9-hut done until Steve actually places a hut.
 P5: other-bot protocol (chat !commands, share coords, don't grief each other).
-P6: free play. Brain only sets goals. Hands run forever.
+P6 doing (2026-08-15): free play. skills/fun.js picks one short goal at a time (wander/gather/doodle/wood/hut/social) when chatMode is idle. !stay/!stop still freeze. Player !commands preempt. No auto-follow Har0x. Do not mark p9-hut done until a hut is actually placed.
 
 ## What we are not doing
 
