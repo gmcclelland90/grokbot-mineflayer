@@ -13,12 +13,15 @@
     "node": ">=18"
   },
   "dependencies": {
-    "mineflayer": "github:PrismarineJS/mineflayer#pc26_2",
-    "mineflayer-pathfinder": "2.4.5",
-    "mineflayer-collectblock": "1.6.0",
-    "mineflayer-pvp": "1.3.2",
-    "mineflayer-auto-eat": "5.0.3",
+    "minecraft-data": "3.113.1",
     "minecraft-protocol": "github:PrismarineJS/node-minecraft-protocol#pc26_2",
-    "minecraft-data": "3.113.1"
+    "mineflayer": "github:PrismarineJS/mineflayer#pc26_2",
+    "mineflayer-armor-manager": "^2.0.1",
+    "mineflayer-auto-eat": "5.0.3",
+    "mineflayer-collectblock": "1.6.0",
+    "mineflayer-pathfinder": "2.4.5",
+    "mineflayer-pvp": "1.3.2",
+    "mineflayer-statemachine": "^1.7.0",
+    "mineflayer-tool": "^1.2.0"
   }
 }

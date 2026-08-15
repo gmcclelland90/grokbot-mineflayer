@@ -4,6 +4,10 @@ import { fileURLToPath } from 'url'
 import pathfinderPkg from 'mineflayer-pathfinder'
 import Vec3Import from 'vec3'
 import { scoreEpisode } from './rl/score.js'
+import { inHole as skillInHole, escapeHole as skillEscapeHole, isOneBlockHole as skillOneBlock } from './skills/escape.js'
+import { huntSand } from './skills/collect.js'
+import { honorFollow } from './skills/follow.js'
+import { idleTick } from './skills/idle.js'
 
 const { goals } = pathfinderPkg
 const Vec3 = Vec3Import.Vec3 || Vec3Import
@@ -346,26 +350,73 @@ function stopPath(bot) {
 }
 
 function inHole(bot) {
-  try {
-    const p = bot.entity.position.floored()
-    let walls = 0
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const b = bot.blockAt(p.offset(dx, 0, dz))
-      const b2 = bot.blockAt(p.offset(dx, 1, dz))
-      if ((b && b.boundingBox === 'block') || (b2 && b2.boundingBox === 'block')) walls++
-    }
-    return walls >= 3
-  } catch {
-    return false
-  }
+  return skillInHole(bot)
+}
+
+function isOneBlockHole(bot) {
+  return skillOneBlock(bot)
 }
 
 async function maybeJumpOutOfHole(bot) {
-  if (!inHole(bot) && !inWater(bot)) return false
+  if (!inHole(bot)) return false
+  if (!isOneBlockHole(bot)) {
+    plog('jump refused, not a 1-block hole')
+    return false
+  }
+  plog('jump 1-block hole')
   try { bot.setControlState('jump', true) } catch {}
   await sleep(350)
   try { bot.setControlState('jump', false) } catch {}
   return true
+}
+
+async function pillarOutOfHole(bot) {
+  let dirt = null
+  try {
+    dirt = bot.inventory.items().find((i) => {
+      const n = resolveItemName(bot, i)
+      return n === 'dirt' || n === 'grass_block'
+    }) || null
+  } catch {}
+  if (!dirt) dirt = findItem(bot, ['dirt', 'grass_block'])
+  if (!dirt) {
+    plog('pillar fail, no dirt')
+    return false
+  }
+  const y0 = bot.entity && bot.entity.position ? bot.entity.position.y : 0
+  try {
+    await bot.equip(dirt, 'hand')
+  } catch (err) {
+    plog('pillar equip fail ' + (err && err.message))
+    return false
+  }
+  const under = feetBlock(bot, -1)
+  if (!under || !under.name || under.name === 'air' || under.name === 'cave_air' || under.name === 'void_air') {
+    plog('pillar no floor under=' + (under && under.name))
+    return false
+  }
+  plog('pillar dirt underfoot y=' + y0.toFixed(2) + ' ref=' + under.name)
+  try { await bot.look(bot.entity.yaw, 1.45, true) } catch {}
+  try { bot.setControlState('jump', true) } catch {}
+  await sleep(80)
+  let placed = false
+  try {
+    await bot.placeBlock(under, new Vec3(0, 1, 0))
+    placed = true
+    plog('pillar placed on ' + under.name)
+  } catch (err) {
+    plog('pillar placeBlock fail ' + (err && err.message))
+    const p = bot.entity && bot.entity.position
+    if (p) {
+      const res = await placeAt(bot, Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))
+      placed = res === 'placed' || res === 'exists'
+      plog('pillar placeAt ' + res)
+    }
+  }
+  await sleep(220)
+  try { bot.setControlState('jump', false) } catch {}
+  const y1 = bot.entity && bot.entity.position ? bot.entity.position.y : y0
+  return placed || y1 > y0 + 0.35
 }
 
 async function escapeHole(bot, state) {
@@ -373,11 +424,22 @@ async function escapeHole(bot, state) {
     state.leftHole = true
     return
   }
+  state.leftHole = false
+  return skillEscapeHole(bot, state)
+}
+
+async function escapeHoleLegacy(bot, state) {
+  if (!inHole(bot)) {
+    state.leftHole = true
+    return
+  }
   state.phase = 'escape'
   const start = posOf(bot)
-  plog('escape start ' + (start && start.str))
+  const dirtN = countNamed(bot, ['dirt', 'grass_block'])
+  plog('escape start ' + (start && start.str) + ' dirt=' + dirtN + ' oneBlock=' + isOneBlockHole(bot))
   writeStatus(bot, state)
   const deadline = Date.now() + 25000
+  let jumped = false
   while (Date.now() < deadline && !state.dead) {
     const creep = nearestHostile(bot, 8)
     if (creep) { await fleeHostile(bot, creep); continue }
@@ -387,14 +449,28 @@ async function escapeHole(bot, state) {
       await clearMove(bot)
       return
     }
-    await maybeJumpOutOfHole(bot)
-    const harox = findPlayer(bot)
-    if (harox) {
-      await safeGoto(bot, harox.position.x, harox.position.y, harox.position.z, 4, 5000)
-    } else {
-      const now = posOf(bot)
-      if (now) await safeGoto(bot, now.x + 3, now.y + 1, now.z, 2, 4000)
+    if (isOneBlockHole(bot) && !jumped) {
+      jumped = true
+      await maybeJumpOutOfHole(bot)
+      await sleep(250)
+      if (!inHole(bot)) {
+        state.leftHole = true
+        plog('left hole by jump at ' + (posOf(bot) && posOf(bot).str))
+        await clearMove(bot)
+        return
+      }
+      plog('jump failed, will pillar')
+    } else if (!isOneBlockHole(bot)) {
+      plog('deeper than 1-block, pillar (no jump-walk)')
     }
+    const ok = await pillarOutOfHole(bot)
+    if (ok && !inHole(bot)) {
+      state.leftHole = true
+      plog('left hole by pillar at ' + (posOf(bot) && posOf(bot).str))
+      await clearMove(bot)
+      return
+    }
+    await sleep(150)
   }
   if (!inHole(bot)) state.leftHole = true
   plog('escape done left=' + state.leftHole + ' pos=' + (posOf(bot) && posOf(bot).str))
@@ -666,7 +742,7 @@ function findClosestBlock(bot, pred, maxDistance = 16) {
   }
   if (block && !isPlayerBuilt(block)) return block
   const origin = here.floored()
-  const r = Math.min(16, maxDistance)
+  const r = Math.min(32, Math.max(8, maxDistance))
   let best = null
   let bestD = 99
   for (let dx = -r; dx <= r; dx++) {
@@ -785,6 +861,43 @@ const FOOD_ITEMS = new Set([
   'mutton', 'cooked_mutton', 'raw_mutton'
 ])
 const FOOD_MOBS = new Set(['cow', 'pig', 'chicken', 'sheep'])
+const FOOD_SCAN_R = 48
+const FOOD_NEAR_R = 16
+const FOOD_FOLLOW_RANGE = 8
+
+function foodScanRadius(bot) {
+  let r = FOOD_SCAN_R
+  try {
+    const e = bot && bot.entity
+    const raw = (e && (e.renderDistance != null ? e.renderDistance : e.render))
+      || (bot && bot.settings && bot.settings.entityRenderDistance)
+    const n = Number(raw)
+    if (Number.isFinite(n) && n > r) r = n
+  } catch {}
+  return r
+}
+
+function nearbyEntityNames(bot, maxD) {
+  const pos = bot.entity && bot.entity.position
+  const out = []
+  if (!pos) return out
+  try {
+    for (const e of Object.values(bot.entities || {})) {
+      if (!e || !e.position) continue
+      if (bot.entity && e.id === bot.entity.id) continue
+      const d = e.position.distanceTo(pos)
+      if (d > maxD) continue
+      const n = e.username || e.name || e.displayName || e.type || '?'
+      out.push(String(n) + '@' + d.toFixed(1))
+    }
+  } catch {}
+  out.sort()
+  return out
+}
+
+function chatHoldsHunt(state) {
+  return !!(state && (state.chatMode === 'come' || state.chatMode === 'stay'))
+}
 
 function isFoodName(n) {
   if (!n) return false
@@ -836,7 +949,7 @@ function droppedItemName(bot, e) {
   return ''
 }
 
-function nearestFoodDrop(bot, maxD = 14) {
+function nearestFoodDrop(bot, maxD = FOOD_SCAN_R) {
   const pos = bot.entity && bot.entity.position
   if (!pos) return null
   let best = null
@@ -846,6 +959,7 @@ function nearestFoodDrop(bot, maxD = 14) {
       if (!isItemEntity(e)) continue
       const n = droppedItemName(bot, e)
       if (n && !isFoodName(n)) continue
+      if (Math.hypot(e.position.x, e.position.z) < SPAWN_SAFE_R) continue
       const d = e.position.distanceTo(pos)
       if (d < bestD) { best = e; bestD = d }
     }
@@ -863,7 +977,7 @@ function berryHasFruit(b) {
   return true
 }
 
-function nearestFoodMob(bot, maxD = 16) {
+function nearestFoodMob(bot, maxD = FOOD_SCAN_R) {
   const pos = bot.entity && bot.entity.position
   if (!pos) return null
   let best = null
@@ -879,6 +993,24 @@ function nearestFoodMob(bot, maxD = 16) {
     }
   } catch {}
   return best
+}
+
+function sayAllowed(bot, state, text) {
+  const s = String(text || '')
+  try {
+    state.chatAllowSay = true
+    bot.chat(s)
+    state.chatAllowSay = false
+    plog('chat said ' + s)
+  } catch {
+    state.chatAllowSay = false
+  }
+}
+
+function haroxInsideSpawn(bot) {
+  const h = findPlayer(bot)
+  if (!h || !h.position) return false
+  return Math.hypot(h.position.x, h.position.z) < SPAWN_SAFE_R
 }
 
 async function tryEat(bot) {
@@ -904,9 +1036,12 @@ function markFoodPass(bot, state, why) {
   state.phase = 'hold'
   const v = vitals(bot)
   const dirt = countNamed(bot, ['dirt', 'grass_block'])
-  const foodN = countFood(bot)
   state.note = 'P4 FOOD PASS ' + why + ' foodInv=' + foodInvSummary(bot) + ' bar=' + v.food + ' dirt=' + dirt
   plog(state.note + ' items=' + inventorySummary(bot) + ' pos=' + (posOf(bot) && posOf(bot).str))
+  if (!state.saidGotFood) {
+    state.saidGotFood = true
+    sayAllowed(bot, state, 'got food')
+  }
   writeStatus(bot, state)
   return true
 }
@@ -919,7 +1054,7 @@ function foodPassReady(bot, state, ateUp) {
 }
 
 async function pickupNearbyFood(bot) {
-  const drop = nearestFoodDrop(bot, 14)
+  const drop = nearestFoodDrop(bot, foodScanRadius(bot))
   if (!drop) return countFood(bot) > 0
   if (Math.hypot(drop.position.x, drop.position.z) < SPAWN_SAFE_R) return false
   const n = droppedItemName(bot, drop) || 'item'
@@ -941,9 +1076,20 @@ async function killFoodMob(bot, mob, state) {
   if (!mob || !mob.position) return false
   const id = mob.id
   const name = String(mob.name || mob.displayName || 'mob')
-  plog('food hunt mob ' + name + ' d=' + bot.entity.position.distanceTo(mob.position).toFixed(1))
-  const deadline = Date.now() + 12000
+  const d0 = bot.entity.position.distanceTo(mob.position)
+  plog('food hunt mob ' + name + ' d=' + d0.toFixed(1) + ' -> path+attack then collect()')
+  stopPath(bot)
+  const deadline = Date.now() + 16000
   while (Date.now() < deadline && !state.dead) {
+    if (chatHoldsHunt(state)) {
+      plog('food hunt interrupted by chat ' + state.chatMode)
+      stopPath(bot)
+      return false
+    }
+    if (inHole(bot)) {
+      await escapeHole(bot, state)
+      if (inHole(bot)) return false
+    }
     try { bot.setControlState('jump', false) } catch {}
     const creep = nearestHostile(bot, 8)
     if (creep) { await fleeHostile(bot, creep); return false }
@@ -953,68 +1099,127 @@ async function killFoodMob(bot, mob, state) {
       plog('food abort mob in spawn')
       break
     }
-    if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
+    if (horizFromOrigin(bot) < SPAWN_SAFE_R && !haroxInsideSpawn(bot)) {
       await leaveSpawnIfNeeded(bot, state)
       return false
     }
     const d = bot.entity.position.distanceTo(e.position)
     if (d > 2.8) {
-      await walkNoJump(bot, e.position.x, e.position.z, 500)
+      await safeGoto(bot, e.position.x, e.position.y, e.position.z, 2, 2500)
     }
     try { await bot.lookAt(e.position.offset(0, 0.8, 0), true) } catch {}
     try { bot.attack(e) } catch {}
-    await sleep(450)
+    await sleep(400)
   }
-  await sleep(300)
-  return pickupNearbyFood(bot)
+  await sleep(400)
+  const drop = nearestFoodDrop(bot, 14)
+  if (drop) {
+    plog('food collect() drop after ' + name)
+    await collectViaPlugin(bot, drop, 'food-drop', 10000)
+  } else {
+    await pickupNearbyFood(bot)
+  }
+  return countFood(bot) > 0
+}
+
+async function exploreFoodAway(bot, state) {
+  const p = bot.entity && bot.entity.position
+  if (!p) return false
+  const last = state.lastFoodPos
+  if (last && Math.hypot(p.x - last.x, p.z - last.z) < 1.5) {
+    state.foodExploreDir = (state.foodExploreDir || 0) + 1
+    plog('food refuse 1x1 wander, new heading')
+  }
+  state.lastFoodPos = { x: p.x, y: p.y, z: p.z }
+  state.lastFoodExploreAt = Date.now()
+  const idx = (state.foodExploreDir || 0) % 8
+  state.foodExploreDir = idx + 1
+  const ang = (idx / 8) * Math.PI * 2
+  const dist = 20 + ((idx * 3) % 11)
+  let tx = p.x + Math.cos(ang) * dist
+  let tz = p.z + Math.sin(ang) * dist
+  if (!haroxInsideSpawn(bot) && Math.hypot(tx, tz) < SPAWN_SAFE_R) {
+    const rr = Math.hypot(tx, tz) || 1
+    tx = (tx / rr) * SPAWN_LEAVE_R
+    tz = (tz / rr) * SPAWN_LEAVE_R
+  }
+  plog('food explore ' + dist + 'm heading=' + idx + ' -> ' + tx.toFixed(1) + ' ' + tz.toFixed(1) + ' destR=' + Math.hypot(tx, tz).toFixed(1))
+  stopPath(bot)
+  applyNoJumpMovements(bot)
+  await pathfindNoJumpToward(bot, { x: tx, y: p.y, z: tz }, 10000)
+  return true
 }
 
 async function foodHunt(bot, state) {
-  if (chatBusy(state)) return
+  if (chatHoldsHunt(state)) return
+  if (inHole(bot)) {
+    await escapeHole(bot, state)
+    return
+  }
   state.phase = 'food'
   const ateUp = await tryEat(bot)
   if (foodPassReady(bot, state, ateUp)) return
+  if (!state.saidHungry) {
+    state.saidHungry = true
+    sayAllowed(bot, state, 'hungry')
+  }
   const r = horizFromOrigin(bot)
   const dirt = countNamed(bot, ['dirt', 'grass_block'])
   const v = vitals(bot)
-  state.note = 'food hunt r=' + r.toFixed(1) + ' dirt=' + dirt + ' foodInv=' + foodInvSummary(bot) + ' bar=' + v.food
+  const harox = findPlayer(bot)
+  state.note = 'food hunt r=' + r.toFixed(1) + ' dirt=' + dirt + ' foodInv=' + foodInvSummary(bot) + ' bar=' + v.food + (harox ? ' har0x' : '')
   writeStatus(bot, state)
-  plog(state.note + ' items=' + inventorySummary(bot) + ' pos=' + (posOf(bot) && posOf(bot).str))
 
   try { bot.setControlState('jump', false) } catch {}
-  try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch {}
   const creep = nearestHostile(bot, 8)
   if (creep) { await fleeHostile(bot, creep); return }
-  if (r < SPAWN_SAFE_R) {
+  if (r < SPAWN_SAFE_R && !haroxInsideSpawn(bot)) {
     await leaveSpawnIfNeeded(bot, state)
     return
   }
 
-  const drop = nearestFoodDrop(bot, 14)
+  const scanR = foodScanRadius(bot)
+  const drop = nearestFoodDrop(bot, scanR)
+  const bush = findClosestBlock(bot, berryHasFruit, scanR)
+  const mob = nearestFoodMob(bot, scanR)
+  const dropD = drop ? bot.entity.position.distanceTo(drop.position).toFixed(1) : '-'
+  const bushD = bush ? bot.entity.position.distanceTo(bush.position.offset(0.5, 0, 0.5)).toFixed(1) : '-'
+  const mobD = mob ? bot.entity.position.distanceTo(mob.position).toFixed(1) : '-'
+  const mobN = mob ? String(mob.name || mob.displayName || 'mob') : 'none'
+  plog('food scan r=' + scanR + ' drop=' + (drop ? (droppedItemName(bot, drop) || 'item') + '@' + dropD : 'none') +
+    ' berry=' + (bush ? bushD : 'none') + ' mob=' + mobN + '@' + mobD +
+    ' pos=' + (posOf(bot) && posOf(bot).str) + ' items=' + inventorySummary(bot))
+  if (!drop && !bush && !mob) {
+    const seen = nearbyEntityNames(bot, scanR)
+    plog('food scan empty r=' + scanR + ' entities=' + (seen.length ? seen.slice(0, 24).join(',') : 'none'))
+  }
+
   if (drop) {
+    stopPath(bot)
     const got = await pickupNearbyFood(bot)
     if (foodPassReady(bot, state, false) || got) return
   }
-
-  const bush = findClosestBlock(bot, berryHasFruit, 16)
   if (bush && Math.hypot(bush.position.x, bush.position.z) >= SPAWN_SAFE_R) {
+    stopPath(bot)
     const got = await harvestBerries(bot, bush)
     if (foodPassReady(bot, state, false) || got) return
   }
-
-  const mob = nearestFoodMob(bot, 16)
   if (mob) {
+    stopPath(bot)
     const got = await killFoodMob(bot, mob, state)
     if (foodPassReady(bot, state, false) || got) return
   }
 
-  await maybeSoftWalkHarox(bot)
-  if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
-    await leaveSpawnIfNeeded(bot, state)
+  if (chatHoldsHunt(state)) return
+
+  // no auto-follow Har0x; come/follow only via chat
+
+  const near = nearestFoodMob(bot, FOOD_NEAR_R) || nearestFoodDrop(bot, FOOD_NEAR_R) || findClosestBlock(bot, berryHasFruit, FOOD_NEAR_R)
+  if (!near) {
+    await exploreFoodAway(bot, state)
     return
   }
-  await wanderSolidNear(bot, 600)
-  await sleep(300)
+  await sleep(400)
 }
 
 
@@ -1869,7 +2074,7 @@ async function buildHouse(bot, state) {
 async function followSurviveTick(bot, state) {
   if (state.dead) return
   await tryEat(bot)
-  if (inHole(bot) || inWater(bot)) await maybeJumpOutOfHole(bot)
+  if (inHole(bot)) { await escapeHole(bot, state); return }
   const creep = nearestHostile(bot, 8)
   if (creep) {
     stopPath(bot)
@@ -1917,6 +2122,7 @@ function parseLocalCmd(text) {
   if (core === 'come' || core === 'here' || core === 'come here' || core === 'come to me') return 'come'
   if (core === 'follow' || core === 'follow me') return 'follow'
   if (core === 'stop' || core === 'stay' || core === 'stand still') return 'stay'
+  if (/\bover here\b/.test(t) || /\bthis way\b/.test(t) || /\bcome look\b/.test(t) || /\bcome see\b/.test(t) || /\blook here\b/.test(t)) return 'come'
   if (/\b(hi|hey|hello)\b/.test(t)) return 'hi'
   return null
 }
@@ -1929,6 +2135,7 @@ async function comeNow(bot, state, user, extra) {
   if (state.chatComing) return
   state.chatComing = true
   try {
+    if (inHole(bot)) await escapeHole(bot, state)
     try { bot.setControlState('jump', false) } catch {}
     let x, y, z
     if (extra && extra.x != null && extra.z != null) {
@@ -1964,6 +2171,10 @@ async function comeNow(bot, state, user, extra) {
 
 async function honorChat(bot, state) {
   const mode = state.chatMode
+  if (inHole(bot) && (mode === 'follow' || mode === 'come' || mode === 'stay')) {
+    await escapeHole(bot, state)
+    if (inHole(bot)) return
+  }
   if (mode === 'stay') {
     stopPath(bot)
     await clearMove(bot)
@@ -1989,7 +2200,7 @@ async function honorChat(bot, state) {
     state.note = 'chat come ' + (state.chatUser || '')
     writeStatus(bot, state)
     if (!state.chatComing) await comeNow(bot, state, state.chatUser, state.chatExtra || null)
-    if (state.chatMode === 'come') state.chatMode = 'stay'
+    if (state.chatMode === 'come') state.chatMode = null
   }
 }
 
@@ -2009,16 +2220,26 @@ export function startPlayLoop(bot) {
     episodeStart: Date.now(),
     griefPlanks: 0,
     foodPassed: false,
+    saidHungry: false,
+    saidGotFood: false,
+    foodExploreDir: 0,
+    lastFoodPos: null,
+    lastFoodExploreAt: 0,
+    saidLookingSand: false,
+    sandExploreDir: 0,
+    lastSandPos: null,
     chatMode: null,
     chatUser: '',
     chatExtra: null,
     chatComing: false,
-    lastHeyAt: 0
+    lastHeyAt: 0,
+    saidComing: false
   }
 
   const chat = (msg) => {
     const s = String(msg || '')
-    if (s === 'house up' || (s.length > 0 && s.length <= 40 && state.chatAllowSay)) {
+    const allowed = s === 'house up' || s === 'coming' || s === 'hungry' || s === 'got food' || s === 'hey' || s === 'looking for sand'
+    if (allowed || (s.length > 0 && s.length <= 40 && state.chatAllowSay)) {
       try { bot.chat(s) } catch {}
       plog('chat said ' + s)
       return
@@ -2058,18 +2279,30 @@ export function startPlayLoop(bot) {
       state.chatMode = 'follow'
       state.chatUser = user || ''
       state.chatExtra = extra || null
+      stopPath(bot)
+      plog('chat cmd follow ' + (user || '?') + ' (stay cancelled, hunt may resume loose)')
+      writeStatus(bot, Object.assign({}, state, { phase: 'chat-follow', note: 'chat follow ' + (user || '?') }))
+      if (inHole(bot)) {
+        plog('follow deferred, escape first')
+        return
+      }
       const ent = findPlayerNamed(bot, user)
       if (ent) startFollow(bot, ent, FOLLOW_RANGE)
-      plog('chat cmd follow ' + (user || '?'))
-      writeStatus(bot, Object.assign({}, state, { phase: 'chat-follow', note: 'chat follow ' + (user || '?') }))
       return
     }
     if (cmd === 'come') {
       state.chatMode = 'come'
       state.chatUser = user || ''
       state.chatExtra = extra || null
-      plog('chat cmd come from ' + (user || '?'))
+      stopPath(bot)
+      state.saidComing = true
+      chat('coming')
+      plog('chat cmd come from ' + (user || '?') + ' (stay cancelled)')
       writeStatus(bot, Object.assign({}, state, { phase: 'chat-come', note: 'chat come from ' + (user || '?') }))
+      if (inHole(bot)) {
+        plog('come deferred, escape first')
+        return
+      }
       comeNow(bot, state, user, extra)
       return
     }
@@ -2146,9 +2379,7 @@ export function startPlayLoop(bot) {
   }, 2000)
   if (cmdPoll && cmdPoll.unref) cmdPoll.unref()
 
-  setTimeout(() => {
-    try { maybeSayHey('spawn') } catch {}
-  }, 1500)
+  // spawn: escape then follow Har0x + "coming" (no hey)
 
 
   bot.on('death', () => {
@@ -2172,6 +2403,8 @@ export function startPlayLoop(bot) {
     state.dead = false
     state.waitingSpawn = false
     state.leftHole = false
+    state.foodPassed = false
+    state.saidLookingSand = false
     state.note = 'respawned, wait then resume house'
     writeStatus(bot, state)
     logEpisode(bot, state, 'respawn', 'respawned')
@@ -2220,7 +2453,7 @@ export function startPlayLoop(bot) {
 
   ;(async () => {
     try {
-      plog('loop start pid=' + process.pid + ' mode=p4-food collectBlock=' + (bot.collectBlock && typeof bot.collectBlock.collect === 'function' ? 'ready' : 'MISSING'))
+      plog('loop start pid=' + process.pid + ' mode=p5-sand skills=on collectBlock=' + (bot.collectBlock && typeof bot.collectBlock.collect === 'function' ? 'ready' : 'MISSING'))
       try {
         if (bot.collectBlock) {
           bot.collectBlock.chestLocations = []
@@ -2237,6 +2470,12 @@ export function startPlayLoop(bot) {
         }
       } catch {}
       writeStatus(bot, state)
+      await sleep(600)
+      if (inHole(bot)) {
+        plog('spawn in hole, escape first')
+        await escapeHole(bot, state)
+      }
+      plog('no auto-follow; chat come/follow only. skills=escape,collect,follow,idle')
       while (true) {
         if (state.dead || state.waitingSpawn) {
           state.phase = 'dead'
@@ -2253,24 +2492,15 @@ export function startPlayLoop(bot) {
           state.note = 'simple after death'
         }
 
-        if (chatBusy(state)) {
+        if (inHole(bot)) {
+          state.leftHole = false
+          state.phase = 'escape'
+          await escapeHole(bot, state)
+          continue
+        }
+
+        if (state.chatMode === 'come' || state.chatMode === 'stay' || state.chatMode === 'follow') {
           await honorChat(bot, state)
-          continue
-        }
-
-        const sandNow = countSand(bot)
-        const dirtNow = countNamed(bot, ['dirt', 'grass_block'])
-        const have = sandNow + dirtNow
-        const rNow = horizFromOrigin(bot)
-
-        if (rNow < SPAWN_SAFE_R) {
-          state.phase = 'leave-spawn'
-          await leaveSpawnIfNeeded(bot, state)
-          continue
-        }
-
-        if (have < GATHER_TARGET) {
-          await simpleGetOne(bot, state)
           continue
         }
 
@@ -2280,7 +2510,31 @@ export function startPlayLoop(bot) {
           continue
         }
 
-        await simpleHold(bot, state)
+        if (chatBusy(state)) {
+          await honorChat(bot, state)
+          continue
+        }
+
+        const sandNow = countSand(bot)
+        const dirtNow = countNamed(bot, ['dirt', 'grass_block'])
+        const have = sandNow + dirtNow
+        const rNow = horizFromOrigin(bot)
+        const followingHarox = state.chatMode === 'follow' || state.chatMode === 'come'
+
+        if (rNow < SPAWN_SAFE_R && !followingHarox) {
+          state.phase = 'leave-spawn'
+          await leaveSpawnIfNeeded(bot, state)
+          continue
+        }
+
+        if (sandNow < 1) {
+          await huntSand(bot, state)
+          writeStatus(bot, state)
+          continue
+        }
+
+        await idleTick(bot, state)
+        writeStatus(bot, state)
       }
     } catch (err) {
       plog('loop crash ' + (err && err.message))

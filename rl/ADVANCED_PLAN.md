@@ -5,8 +5,7 @@ Rethink: stop homemade loops. Plugins do the body. A state machine does the hand
 ## Layers
 
 1. Body (Mineflayer plugins). Never reimplement these.
-   - HAVE: mineflayer, pathfinder, collectblock, auto-eat, pvp
-   - ADD NOW: mineflayer-tool, mineflayer-armor-manager, mineflayer-statemachine
+   - HAVE: mineflayer, pathfinder, collectblock, auto-eat, pvp, tool, armor-manager, statemachine
    - ADD NEXT: schematic/builder (real houses), bloodhound (who hit me), prismarine-viewer optional
 2. Hands: statemachine nested states (idle, follow, collect, eat, flee, fight, craft, place, talk, hold).
    Transitions, not a 1500-line tick().
@@ -28,9 +27,12 @@ Rethink: stop homemade loops. Plugins do the body. A state machine does the hand
 
 ## Build order
 
-P0 now: wire collectblock for all gather. Keep chat. Keep matrix.
-P1: install tool + armor-manager + statemachine. Replace play.js tick with states.
-P2: skill files + !commands (collect, follow, come, stop, eat, flee, craft, place).
+P0 done: collectblock for gather. Chat kept. Matrix kept.
+P1 doing (2026-08-15): installed tool, armor-manager, statemachine. Loaded in index.js.
+    skills/ modules: escape.js, collect.js, follow.js, idle.js (call collectBlock + pathfinder).
+    play.js prefers those skills. Escape first. No auto-follow (come/follow only if chat says so).
+    p5-sand hunts sand via collectBlock.collect outside r>=24.
+P2 next: BotStateMachine states + !commands (collect, follow, come, stop, eat, flee, craft, place).
 P3: food + wood + tools via those skills (climb matrix p4-p13).
 P4: schematic/builder for the hut and bigger builds.
 P5: other-bot protocol (chat !commands, share coords, don't grief each other).

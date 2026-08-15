@@ -1,6 +1,6 @@
 {
-  "current": "p4-food",
-  "updated": "2026-08-15T01:45:00Z",
+  "current": "p5-sand",
+  "updated": "2026-08-15T02:17:00Z",
   "loop": "attempt current skill -> score episode -> mark pass/fail -> stay or advance",
   "skills": [
     {
@@ -37,24 +37,24 @@
     {
       "id": "p4-food",
       "name": "Get food and eat",
-      "status": "doing",
+      "status": "done",
       "deps": [
         "p2-hold-one"
       ],
-      "attempts": 2,
+      "attempts": 3,
       "last_score": null,
-      "note": "attempt 2: collectblock wired (collect() on food item/berry; kill+collect drop still ok). pid=560984 pos=25.31 100.00 24.50 r=35.2 dirt=9 food_inv=0 bar=19 deaths=0; collect() not called in first 45s (no food target in 16m), wander stuck local, 2026-08-15 11:44 AEST. USE collectblock, stop homemade dig."
+      "note": "food_inv=2 at -6.7 93 53.6 following Har0x, 2026-08-15 12:01 AEST"
     },
     {
       "id": "p5-sand",
       "name": "Find sand not just dirt",
-      "status": "todo",
+      "status": "doing",
       "deps": [
         "p3-stack-8"
       ],
-      "attempts": 0,
+      "attempts": 1,
       "last_score": null,
-      "note": ""
+      "note": "skills/ escape+collect wired; no auto-follow; hunt sand r>=24; 2026-08-15 12:17 AEST"
     },
     {
       "id": "p6-sandstone",

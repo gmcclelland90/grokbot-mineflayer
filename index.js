@@ -7,6 +7,9 @@ import { startPlayLoop } from './play.js'
 import collectBlockPkg from 'mineflayer-collectblock'
 import pvpPkg from 'mineflayer-pvp'
 import { loader as autoEat } from 'mineflayer-auto-eat'
+import toolPkg from 'mineflayer-tool'
+import armorManagerPkg from 'mineflayer-armor-manager'
+import stateMachine from 'mineflayer-statemachine'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -163,7 +166,10 @@ function connect(cfg) {
     bot.loadPlugin(pathfinder)
     bot.loadPlugin(pluginOf(collectBlockPkg, 'collectblock'))
     bot.loadPlugin(pluginOf(pvpPkg, 'pvp'))
-    log('info', 'Loaded plugins: pathfinder, collectblock, pvp')
+    bot.loadPlugin(pluginOf(toolPkg, 'tool'))
+    bot.loadPlugin(pluginOf(armorManagerPkg, 'armor-manager'))
+    const sm = stateMachine && (stateMachine.BotStateMachine || stateMachine.default)
+    log('info', 'Loaded plugins: pathfinder, collectblock, pvp, tool, armor-manager statemachine=' + !!(sm || (stateMachine && stateMachine.StateTransition)))
   } catch (err) {
     log('error', 'Plugin load failed: ' + err.message)
     console.error(err)
@@ -241,6 +247,9 @@ function connect(cfg) {
     try { applySafeMovements(bot) } catch (err) { log('error', 'respawn movements failed: ' + err.message) }
     try {
       if (bot.autoEat && typeof bot.autoEat.enableAuto === 'function') bot.autoEat.enableAuto()
+    } catch {}
+    try {
+      if (bot.armorManager && typeof bot.armorManager.equipAll === 'function') bot.armorManager.equipAll()
     } catch {}
   })
 
