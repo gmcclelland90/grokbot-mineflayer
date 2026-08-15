@@ -5,6 +5,7 @@ import { craftByName, craftPlanks } from './craft.js'
 import { placeAt } from './place.js'
 import { findGroundY } from './build.js'
 import { withChestLock } from './cluster.js'
+import { unstickIfNeeded } from './stuck.js'
 
 // Official chest.js: bot.openContainer, containerItems(), deposit, withdraw
 // https://raw.githubusercontent.com/PrismarineJS/mineflayer/master/examples/chest.js
@@ -205,12 +206,19 @@ export async function depositExtras(bot, state) {
   return dumped > 0
 }
 
+function canCraftChest(bot) {
+  return countNamed(bot, ['chest']) >= 1 || countPlanks(bot) >= 8 || countLogs(bot) >= 2
+}
+
 async function ensureChestItem(bot, state) {
   if (countNamed(bot, ['chest']) >= 1) return true
-  for (let i = 0; i < 8 && countLogs(bot) < 4 && countPlanks(bot) < 16 && !state.dead; i++) {
-    state.note = 'dump gather wood for chest'
+  if (!canCraftChest(bot)) {
+    state.phase = 'wood'
+    state.note = 'dump need chest but no logs — gather wood'
+    plog(state.note + ' inv=' + inventorySummary(bot))
+    try { await unstickIfNeeded(bot, state, 'dump-no-wood') } catch {}
     try { await punchTree(bot, state) } catch (err) { plog('dump wood fail ' + (err && err.message)) }
-    if (countLogs(bot) >= 2 || countPlanks(bot) >= 8) break
+    return canCraftChest(bot) && countNamed(bot, ['chest']) >= 1
   }
   if (countPlanks(bot) < 8 && countLogs(bot) >= 1) {
     try { await craftPlanks(bot, state) } catch {}
@@ -247,6 +255,14 @@ async function maybeSign(bot, state, x, y, z, label) {
 
 export async function ensureDumpChests(bot, state) {
   state.phase = 'dump'
+  try { await unstickIfNeeded(bot, state, 'dump') } catch {}
+  if (!canCraftChest(bot)) {
+    state.phase = 'wood'
+    state.note = 'dump need chest but no logs — gather wood r>=24'
+    plog(state.note + ' inv=' + inventorySummary(bot))
+    try { await punchTree(bot, state) } catch (err) { plog('dump wood fail ' + (err && err.message)) }
+    return false
+  }
   const origin = (state && state.campOrigin) || campOriginFromDisk()
   const yGuess = origin.y != null ? origin.y : (bot.entity && bot.entity.position && bot.entity.position.y) || 64
   const slots = plannedDumpSlots({ x: origin.x, y: origin.y, z: origin.z })
