@@ -1,5 +1,6 @@
 import { Vec3, goals, pathfinderPkg, plog, sleep, posOf, bareName, countSand, countNamed, countLogs, inventorySummary, horizFromOrigin, isSolid, isPlayerBuilt, stopPath, sayAllowed, findPlayerNamed, SPAWN_SAFE_R } from './lib.js'
 import { huntSand, huntBlock, leaveSpawnForGather } from './collect.js'
+import { huntFood, countFood, tryEat } from './food.js'
 import { punchTree } from './wood.js'
 import { placeAt } from './place.js'
 import { buildNamed, countBuildMaterials, hutSolidCount } from './build.js'
@@ -296,6 +297,12 @@ export async function funTick(bot, state) {
   if (horizFromOrigin(bot) < SPAWN_SAFE_R) {
     mark(bot, state, 'leave-spawn', 'leave spawn then work')
     await leaveSpawnForGather(bot, state)
+    return true
+  }
+  if (bot.food < 12 || countFood(bot) < 2) {
+    mark(bot, state, 'food', 'feed before jobs food=' + bot.food + ' inv=' + countFood(bot))
+    await tryEat(bot)
+    await huntFood(bot, state)
     return true
   }
   try {
