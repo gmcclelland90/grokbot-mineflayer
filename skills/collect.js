@@ -309,7 +309,7 @@ function applyLeaveMovements(bot) {
     mv.canDig = false
     mv.allow1by1towers = false
     mv.allowParkour = false
-    mv.allowSprinting = false
+    mv.allowSprinting = true
     mv.maxDropDown = 3
     mv.scafoldingBlocks = []
     bot.pathfinder.setMovements(mv)
@@ -379,7 +379,29 @@ export async function leaveSpawnForGather(bot, state) {
     try { await leaveRoof(bot, state) } catch (err) { plog('leave roof fail ' + (err && err.message)) }
   }
   const before = { x: p.x, z: p.z }
-  await walkRadialOut(bot, state, 2000)
+  const pin = liveCampXZ()
+  if (horizFromOrigin(bot) < SPAWN_SAFE_R && bot.pathfinder && goals) {
+    const cur = bot.entity && bot.entity.position
+    if (cur) {
+      let targetY = cur.y
+      if (cur.y < 80) {
+        targetY = 100
+        plog('leave-spawn y<80, aim y=100 to climb out of cave')
+      }
+      try {
+        const g = goals.GoalNear ? new goals.GoalNear(pin.x, targetY, pin.z, 8) : new goals.GoalXZ(pin.x, pin.z)
+        const pth = bot.pathfinder.goto(g)
+        const t = sleep(8000).then(() => { try { bot.pathfinder.setGoal(null) } catch {}; throw new Error('goto-timeout') })
+        await Promise.race([pth, t])
+      } catch (err) {
+        plog('leave-spawn pathfind fail, fallback to radial walk: ' + (err && err.message))
+        try { bot.pathfinder.setGoal(null) } catch {}
+        await walkRadialOut(bot, state, 2000)
+      }
+    }
+  } else {
+    await walkRadialOut(bot, state, 2000)
+  }
   if (horizFromOrigin(bot) < SPAWN_SAFE_R && bot.pathfinder && goals) {
     const cur = bot.entity && bot.entity.position
     if (cur) {
